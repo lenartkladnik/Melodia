@@ -1,0 +1,570 @@
+#include <SFML/Graphics.hpp>
+#include <string>
+#include <iostream>
+#include <fstream>
+#include "RoundedRectangleShape.hpp"
+#include "data.hpp"
+
+StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_path, const std::string& playlist) {
+  auto half = (float)(window_size.x / 2);
+  auto third = (float)(window_size.x / 3);
+
+  auto cover_size = third - offset;
+
+  sf::RoundedRectangleShape cover({cover_size, cover_size}, 8, main_n);
+
+  sf::Texture cover_texture;
+  if (!cover_texture.loadFromFile(song_path + ".png")) {
+    std::cerr << "Error: Failed to load '" << song_path << ".png" << "'." << std::endl;
+  }
+  cover_texture.setSmooth(true);
+
+  cover.setTexture(&cover_texture);
+  cover.setPosition({half - cover.getGlobalBounds().size.x / 2, padding_top});
+
+  sf::RoundedRectangleShape cover_shadow({cover_size, cover_size}, in_round, main_n);
+  cover_shadow.setFillColor(background_shadow_color);
+  cover_shadow.setPosition({cover.getPosition().x + shadow_offset, cover.getPosition().y + shadow_offset});
+
+  std::ifstream artist_file(song_path + ".artist");
+  std::string artist_string = "";
+  if (artist_file.good()) {
+    std::getline(artist_file, artist_string);
+  } else {
+    std::cerr << "Error: Failed to read artist name from '" << song_path << ".artist" << "'.";
+  }
+  std::ifstream title_file(song_path + ".title");
+  std::string title_string = "";
+  if (title_file.good()) {
+    std::getline(title_file, title_string);
+  } else {
+    std::cerr << "Error: Failed to read title from '" << song_path << ".title" << "'.";
+  }
+
+  sf::Text artist(default_font, artist_string);
+  artist.setCharacterSize(18);
+  artist.setPosition({half - artist.getGlobalBounds().size.x / 2, padding_top + cover_size + 50.f});
+  artist.setFillColor(artist_color);
+  sf::Text title(default_font, title_string);
+  title.setCharacterSize(22);
+  title.setPosition({half - title.getGlobalBounds().size.x / 2, padding_top + cover_size + 25.f});
+  title.setFillColor(title_color);
+
+  sf::Texture play_tex;
+  if (!play_tex.loadFromFile("misc/play.png")) {
+    std::cerr << "Error: Failed to load 'misc/play.png'." << std::endl;
+  }
+  play_tex.setSmooth(true);
+
+  sf::Texture pause_tex;
+  if (!pause_tex.loadFromFile("misc/pause.png")) {
+    std::cerr << "Error: Failed to load 'misc/pause.png'." << std::endl;
+  }
+  pause_tex.setSmooth(true);
+
+  sf::Sprite main_control(play_tex);
+  main_control.setPosition({(float)(half - main_control.getGlobalBounds().size.x / 2), padding_top + cover_size + offset + 60.f});
+
+  auto next_tex = std::make_shared<sf::Texture>();
+  if (!next_tex->loadFromFile("misc/next.png")) {
+    std::cerr << "Error: Failed to load 'misc/next.png'." << std::endl;
+  }
+  next_tex->setSmooth(true);
+
+  sf::Sprite next_control(*next_tex);
+  next_control.setPosition({main_control.getPosition().x + 40.f, main_control.getPosition().y});
+
+  auto previous_tex = std::make_shared<sf::Texture>();
+  if (!previous_tex->loadFromFile("misc/previous.png")) {
+    std::cerr << "Error: Failed to load 'misc/previous.png'." << std::endl;
+  }
+  previous_tex->setSmooth(true);
+
+  sf::Sprite previous_control(*previous_tex);
+  previous_control.setPosition({main_control.getPosition().x - 40.f, main_control.getPosition().y});
+
+  sf::RoundedRectangleShape player_background({cover_size + offset * 3, padding_top + cover_size + offset + 80.f}, out_round, main_n);
+  player_background.setPosition({half - player_background.getSize().x / 2, padding_top - 30.f});
+  player_background.setFillColor(background_color);
+
+  sf::RoundedRectangleShape player_shadow_background({player_background.getGlobalBounds().size.x + shadow_offset, player_background.getGlobalBounds().size.y + shadow_offset}, out_round, main_n);
+  player_shadow_background.setPosition({player_background.getPosition().x + shadow_offset, player_background.getPosition().y + shadow_offset});
+  player_shadow_background.setFillColor(dark_main_color);
+
+  float progress_width = third;
+
+  sf::RoundedRectangleShape progress({progress_width, progress_height}, progress_round, progress_n);
+  progress.setFillColor(progress_color);
+  progress.setPosition({cover_size + (int)(offset / 2), padding_top + cover_size + offset + 40.f});
+
+  sf::RoundedRectangleShape progress_shadow({progress_width, progress_height}, progress_round, progress_n);
+  progress_shadow.setPosition({progress.getPosition().x + 5.f, progress.getPosition().y + 5.f});
+  progress_shadow.setFillColor(background_shadow_color);
+
+  auto live_empty_tex = std::make_shared<sf::Texture>();
+  if (!live_empty_tex->loadFromFile("misc/live_empty.png")) {
+    std::cerr << "Error: Failed to load 'misc/live_empty.png'." << std::endl;
+  }
+
+  auto live_full_tex = std::make_shared<sf::Texture>();
+  if (!live_full_tex->loadFromFile("misc/live_full.png")) {
+    std::cerr << "Error: Failed to load 'misc/live_full.png'." << std::endl;
+  }
+
+  sf::Sprite live(*live_empty_tex);
+  live.setPosition({progress.getPosition().x + progress.getGlobalBounds().size.x - live.getGlobalBounds().size.x, main_control.getPosition().y});
+
+  auto volume_tex = std::make_shared<sf::Texture>();
+  if (!volume_tex->loadFromFile("misc/volume.png")) {
+    std::cerr << "Error: Failed to load 'misc/volume.png'." << std::endl;
+  }
+  volume_tex->setSmooth(true);
+
+  auto mute_tex = std::make_shared<sf::Texture>();
+  if (!mute_tex->loadFromFile("misc/mute.png")) {
+    std::cerr << "Error: Failed to load 'misc/mute.png'." << std::endl;
+  }
+  mute_tex->setSmooth(true);
+
+  sf::Sprite vol_icon(*volume_tex);
+  sf::RoundedRectangleShape vol_slider({100.f, progress_height - 2.f}, vol_round, vol_n);
+  sf::RoundedRectangleShape vol_slider_shadow(vol_slider.getGlobalBounds().size, vol_round, vol_n);
+
+  vol_icon.setPosition({progress.getPosition().x, main_control.getPosition().y});
+
+  vol_slider.setPosition({vol_icon.getPosition().x + 30.f, vol_icon.getPosition().y + 11.f});
+  vol_slider.setFillColor(progress_color);
+  vol_slider_shadow.setPosition({vol_slider.getPosition().x + 2.f, vol_slider.getPosition().y + 3.f});
+  vol_slider_shadow.setFillColor(background_shadow_color);
+
+  sf::RoundedRectangleShape control_corner({190.f, 50.f}, out_round, main_n);
+  control_corner.setPosition({window_size.x - control_corner.getGlobalBounds().size.x - 20.f, -10.f});
+  control_corner.setFillColor(background_color);
+
+  sf::RoundedRectangleShape control_corner_shadow(control_corner.getGlobalBounds().size, out_round, main_n);
+  control_corner_shadow.setPosition({control_corner.getPosition().x + shadow_offset, control_corner.getPosition().y + shadow_offset});
+  control_corner_shadow.setFillColor(dark_main_color);
+
+  float control_corner_gap = 15.f;
+
+  auto favorite_empty_tex = std::make_shared<sf::Texture>();
+  if (!favorite_empty_tex->loadFromFile("misc/favorite_empty.png")) {
+    std::cerr << "Error: Failed to load 'misc/favorite_empty.png'." << std::endl;
+  }
+  favorite_empty_tex->setSmooth(true);
+
+  auto favorite_full_tex = std::make_shared<sf::Texture>();
+  if (!favorite_full_tex->loadFromFile("misc/favorite_full.png")) {
+    std::cerr << "Error: Failed to load 'misc/favorite_full.png'." << std::endl;
+  }
+  favorite_full_tex->setSmooth(true);
+
+  sf::Sprite favorite(*favorite_empty_tex);
+  favorite.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});;
+
+  auto manage_playlist_tex = std::make_shared<sf::Texture>();
+  if (!manage_playlist_tex->loadFromFile("misc/manage_playlist.png")) {
+    std::cerr << "Error: Failed to load 'misc/manage_playlist.png'." << std::endl;
+  }
+  manage_playlist_tex->setSmooth(true);
+
+  sf::Sprite manage_playlist(*manage_playlist_tex);
+  manage_playlist.setPosition({favorite.getPosition().x + favorite.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
+
+  auto trash_tex = std::make_shared<sf::Texture>();
+  if (!trash_tex->loadFromFile("misc/trash.png")) {
+    std::cerr << "Error: Failed to load 'misc/trash.png'." << std::endl;
+  }
+  trash_tex->setSmooth(true);
+
+  sf::Sprite trash(*trash_tex);
+  trash.setPosition({manage_playlist.getPosition().x + manage_playlist.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
+
+  auto edit_tex = std::make_shared<sf::Texture>();
+  if (!edit_tex->loadFromFile("misc/edit.png")) {
+    std::cerr << "Error: Failed to load 'misc/edit.png'." << std::endl;
+  }
+  edit_tex->setSmooth(true);
+
+  sf::Sprite edit(*edit_tex);
+  edit.setPosition({trash.getPosition().x + trash.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
+
+  auto side_expand_tex = std::make_shared<sf::Texture>();
+  if (!side_expand_tex->loadFromFile("misc/side_expand.png")) {
+    std::cerr << "Error: Failed to load 'misc/side_expand.png'." << std::endl;
+  }
+  side_expand_tex->setSmooth(true);
+
+  auto side_contract_tex = std::make_shared<sf::Texture>();
+  if (!side_contract_tex->loadFromFile("misc/side_contract.png")) {
+    std::cerr << "Error: Failed to load 'misc/side_contract.png'." << std::endl;
+  }
+  side_contract_tex->setSmooth(true);
+
+  sf::Sprite queue_toggle(*side_expand_tex);
+  queue_toggle.setPosition({0.f, 26.f});
+
+  sf::RoundedRectangleShape queue_background({500.f, window_size.y - 40.f}, out_round, main_n);
+  queue_background.setPosition({50.f - queue_background.getGlobalBounds().size.x, 20.f});
+  queue_background.setFillColor(background_color);
+
+  sf::RoundedRectangleShape queue_background_shadow(queue_background.getGlobalBounds().size, out_round, main_n);
+  queue_background_shadow.setPosition({queue_background.getPosition().x + shadow_offset, queue_background.getPosition().y + shadow_offset});
+  queue_background_shadow.setFillColor(dark_main_color);
+
+  sf::RoundedRectangleShape search_background({queue_background.getGlobalBounds().size.x - 100.f, 40.f}, 20, main_n);
+  search_background.setPosition({50.f, queue_background.getPosition().y + 10.f});
+  search_background.setFillColor(dark_background_color);
+
+  sf::Text search_before_cursor(default_font, "Search");
+  search_before_cursor.setPosition({search_background.getPosition().x + 10.f, search_background.getPosition().y + 6.f});
+  search_before_cursor.setCharacterSize(20);
+  search_before_cursor.setFillColor(light_text_color);
+
+  sf::Text search_after_cursor(default_font, "");
+  search_after_cursor.setCharacterSize(20);
+  search_after_cursor.setFillColor(text_color);
+
+  auto cancel_queue_search_tex = std::make_shared<sf::Texture>();
+  if (!cancel_queue_search_tex->loadFromFile("misc/close.png")) {
+    std::cerr << "Error: Failed to load 'misc/close.png'." << std::endl;
+  }
+  cancel_queue_search_tex->setSmooth(true);
+
+  sf::Sprite cancel_queue_search(*cancel_queue_search_tex);
+  cancel_queue_search.setPosition({search_background.getPosition().x + search_background.getGlobalBounds().size.x - cancel_queue_search.getGlobalBounds().size.x - 14.f, search_background.getPosition().y + 9.f});
+
+  return StaticPlayerData {
+    cover,
+    cover_shadow,
+    main_control,
+    cover_texture,
+    play_tex,
+    pause_tex,
+    cover_size,
+    artist,
+    title,
+    player_background,
+    player_shadow_background,
+    progress_width,
+    progress,
+    progress_shadow,
+    next_tex,
+    next_control,
+    previous_tex,
+    previous_control,
+    control_corner,
+    control_corner_shadow,
+    trash_tex,
+    trash,
+    playlist,
+    manage_playlist_tex,
+    manage_playlist,
+    favorite_empty_tex,
+    favorite_full_tex,
+    favorite,
+    edit_tex,
+    edit,
+    queue_background,
+    queue_background_shadow,
+    search_background,
+    search_before_cursor,
+    search_after_cursor,
+    true,
+    side_expand_tex,
+    side_contract_tex,
+    queue_toggle,
+    false,
+    volume_tex,
+    mute_tex,
+    vol_icon,
+    vol_slider,
+    vol_slider_shadow,
+    false,
+    live_full_tex,
+    live_empty_tex,
+    live,
+    "",
+    cancel_queue_search_tex,
+    cancel_queue_search
+  };
+}
+
+// if (player.show_cursor) window.draw(player.data->cursor);
+
+void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
+  auto& player_data = *player.data;
+  auto& music = player.music;
+
+  auto main_control = player_data.main_control; // Create a mutable copy of the main_control sprite
+
+  auto playback_pos = music.get_playback_pos();
+  if (playback_pos < slider_threshold) playback_pos = 0.015;
+
+  sf::RoundedRectangleShape progress_done({player_data.progress_width * playback_pos, progress_height}, progress_round, progress_n);
+
+  progress_done.setFillColor(main_color);
+  progress_done.setPosition(player_data.progress.getPosition());
+
+  sf::Text time_left(default_font, music.get_human_left_duration());
+  time_left.setCharacterSize(20);
+  time_left.setPosition({progress_done.getPosition().x + player_data.progress_width + 10.f, player_data.progress.getPosition().y - 10.f});
+  time_left.setFillColor({66, 66, 66});
+
+  if (music.is_playing()) main_control.setTexture(player_data.pause_tex);
+  else main_control.setTexture(player_data.play_tex);
+
+  auto volume = music.get_volume();
+  sf::RoundedRectangleShape vol_slider_full({player_data.vol_slider.getGlobalBounds().size.x * volume, player_data.vol_slider.getGlobalBounds().size.y}, vol_round, vol_n);
+  vol_slider_full.setPosition(player_data.vol_slider.getPosition());
+  vol_slider_full.setFillColor({10, 10, 10});
+
+  window.clear(main_color);
+
+  window.draw(player_data.player_shadow_background);
+  window.draw(player_data.player_background);
+  window.draw(player_data.cover_shadow);
+  window.draw(player_data.cover);
+  window.draw(player_data.artist);
+  window.draw(player_data.title);
+  window.draw(player_data.progress_shadow);
+  window.draw(player_data.progress);
+  window.draw(progress_done);
+  window.draw(time_left);
+  window.draw(main_control);
+  window.draw(player_data.next_control);
+  window.draw(player_data.previous_control);
+  window.draw(player_data.vol_icon);
+  window.draw(player_data.vol_slider_shadow);
+  window.draw(player_data.vol_slider);
+  if (volume > slider_threshold) {
+    window.draw(vol_slider_full);
+  }
+  window.draw(player_data.live);
+
+  window.draw(player_data.control_corner_shadow);
+  window.draw(player_data.control_corner);
+  window.draw(player_data.trash);
+  window.draw(player_data.manage_playlist);
+  window.draw(player_data.favorite);
+  window.draw(player_data.edit);
+
+  window.draw(player_data.queue_background_shadow);
+  window.draw(player_data.queue_background);
+  window.draw(player_data.queue_toggle);
+  if (player_data.queue_half_expanded) {
+    window.draw(player_data.search_background);
+    window.draw(player_data.search_before_cursor);
+    if (player.show_cursor) {
+      sf::RectangleShape cursor({1.2, player_data.search_background.getGlobalBounds().size.y - 15.f});
+      cursor.setPosition({player_data.search_before_cursor.getPosition().x + 2.f + player_data.search_before_cursor.getGlobalBounds().size.x, player_data.search_before_cursor.getPosition().y + 1.f});
+      cursor.setFillColor(white_color);
+      window.draw(cursor);
+    }
+    auto search_after_cursor = player_data.search_after_cursor; // Create a mutable copy of search_after_cursor
+    search_after_cursor.setPosition({player_data.search_before_cursor.getPosition().x + player_data.search_before_cursor.getGlobalBounds().size.x + 2.8f, player_data.search_before_cursor.getPosition().y});
+    window.draw(search_after_cursor);
+  }
+
+  if (player_data.queue_expanded) {
+    // Queue items
+
+    sf::Texture queue_cover_texture;
+
+    sf::RoundedRectangleShape queue_cover({queue_cover_size, queue_cover_size}, 8, main_n);
+
+    sf::RoundedRectangleShape queue_cover_shadow(queue_cover.getGlobalBounds().size, 8, main_n);
+    queue_cover_shadow.setFillColor(dark_background_shadow_color);
+
+    sf::Text queue_title(default_font, "");
+    queue_title.setFillColor(title_color);
+    queue_title.setCharacterSize(18);
+
+    sf::Text queue_artist(default_font, "");
+    queue_artist.setFillColor(artist_color);
+    queue_artist.setCharacterSize(18);
+
+    sf::RoundedRectangleShape queue_entry_background({player_data.queue_background.getGlobalBounds().size.x - 25.f, queue_cover.getGlobalBounds().size.y + 10.f}, 8, main_n);
+    queue_entry_background.setFillColor(background_shadow_color);
+
+    sf::RoundedRectangleShape queue_entry_shadow(queue_entry_background.getGlobalBounds().size, 8, main_n);
+    queue_entry_shadow.setFillColor(dark_background_shadow_color);
+
+    sf::Text queue_entry_duration(default_font, "");
+    queue_entry_duration.setFillColor(light_text_color);
+    queue_entry_duration.setCharacterSize(18);
+
+    sf::RoundedRectangleShape now_playing_bar({queue_entry_background.getGlobalBounds().size.x - 12.f, 4.f}, 2, main_n);
+    now_playing_bar.setFillColor(main_color);
+
+    sf::Texture queue_play_tex;
+    if (!queue_play_tex.loadFromFile("misc/queue_play.png")) {
+      std::cerr << "Error: Failed to load 'misc/queue_play.png'." << std::endl;
+    }
+    queue_play_tex.setSmooth(true);
+
+    sf::Sprite queue_play(queue_play_tex);
+
+
+    bool search_active = !player_data.search_string.empty();
+    if (search_active) {
+      window.draw(player_data.cancel_queue_search);
+    }
+
+    int idx = 0;
+    for (const int id : player.queue) {
+      auto queue_song_path = construct_song_path(player_data.playlist, id);
+      MusicPlayer queue_entry_player;
+      queue_entry_player.load(queue_song_path + ".ogg");
+
+      queue_cover.setScale({1, 1}); // Reset scale because of the hover effect
+
+      if (!queue_cover_texture.loadFromFile(queue_song_path + ".small.png")) {
+        std::cerr << "Error: Failed to load '" << queue_song_path << ".small.png" << "'." << std::endl;
+      }
+      queue_cover_texture.setSmooth(true);
+
+      queue_cover.setTexture(&queue_cover_texture);
+      queue_cover.setPosition({
+        10.f,
+        player_data.search_background.getPosition().y + player_data.search_background.getGlobalBounds().size.y + 20.f + (queue_cover_size + 20.f) * (id == player.song_id ? 0 : idx + 1) // +1 makes space for the current playing song
+      });
+
+      std::ifstream artist_file(queue_song_path + ".artist");
+      std::string artist_string = "";
+      if (artist_file.good()) {
+        std::getline(artist_file, artist_string);
+      } else {
+        std::cerr << "Error: Failed to read artist name from '" << queue_song_path << ".artist" << "'.";
+      }
+
+      if (artist_string.size() > queue_max_char) {
+        artist_string.erase(queue_max_char - 3, artist_string.size());
+        artist_string += "...";
+      }
+
+      std::ifstream title_file(queue_song_path + ".title");
+      std::string title_string = "";
+      if (title_file.good()) {
+        std::getline(title_file, title_string);
+      } else {
+        std::cerr << "Error: Failed to read title from '" << queue_song_path << ".title" << "'.";
+      }
+
+      if (title_string.size() > queue_max_char) {
+        title_string.erase(queue_max_char - 3, title_string.size());
+        title_string += "...";
+      }
+
+      if (search_active && !matching(player_data.search_string, artist_string, match_diff) && !matching(player_data.search_string, title_string, match_diff)) continue; // Skip because it's not a match
+
+      queue_title.setString(title_string);
+      queue_title.setPosition({queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x + 5.f, queue_cover.getPosition().y + queue_cover_size / 3 - 10.f});
+
+      queue_artist.setString(artist_string);
+      queue_artist.setPosition({queue_title.getPosition().x, queue_title.getPosition().y + 20.f});
+
+      queue_entry_background.setPosition({queue_cover.getPosition().x - 5.f, queue_cover.getPosition().y - 5.f});
+
+      queue_entry_shadow.setPosition({queue_entry_background.getPosition().x + small_shadow_offset, queue_entry_background.getPosition().y + small_shadow_offset});
+
+      queue_cover_shadow.setPosition({queue_cover.getPosition().x + 2.f, queue_cover.getPosition().y + 2.f});
+
+      queue_entry_duration.setString(queue_entry_player.get_human_total_duration());
+      queue_entry_duration.setPosition({
+        queue_entry_background.getPosition().x + queue_entry_background.getGlobalBounds().size.x - queue_entry_duration.getGlobalBounds().size.x - 20.f,
+        queue_entry_background.getPosition().y + queue_entry_background.getGlobalBounds().size.y / 2 - queue_entry_duration.getGlobalBounds().size.y / 2
+      });
+
+      if (id == player.song_id) {
+        now_playing_bar.setPosition({
+          queue_entry_background.getPosition().x + 6.f,
+          queue_entry_background.getPosition().y + queue_entry_background.getGlobalBounds().size.y - now_playing_bar.getGlobalBounds().size.y
+        });
+
+        queue_entry_background.setFillColor(dark_background_shadow_color);
+        queue_entry_shadow.setFillColor(background_shadow_color);
+      }
+      else {
+        queue_entry_background.setFillColor(background_shadow_color);
+        queue_entry_shadow.setFillColor(dark_background_shadow_color);
+      }
+
+      // Hover checks
+
+      auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+      bool draw_queue_play = false;
+
+      if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
+        queue_entry_duration.setString("...");
+        queue_entry_duration.setFillColor(text_color);
+        queue_entry_duration.move({0.f, -6.f});
+
+        if (id != player.song_id) {
+          draw_queue_play = true;
+          queue_play.setPosition({
+            queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x / 2 - queue_play.getGlobalBounds().size.x / 2,
+            queue_cover.getPosition().y + queue_cover.getGlobalBounds().size.y / 2 - queue_play.getGlobalBounds().size.y / 2
+          });
+
+          queue_cover.setScale({0.45, 0.45}); // Scale is reset at the top
+          queue_cover.move({24.f, 28.f});
+        }
+      }
+      else {
+        // Reset
+        queue_entry_duration.setFillColor(light_text_color);
+      }
+
+      // Click checks
+
+      auto left_mb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+
+      if (!player.held_left_mb_down && left_mb) {
+        player.queue_play_pos = mouse_pos;
+      }
+
+      if (draw_queue_play && player.queue_play_pos.x != -1 && queue_play.getGlobalBounds().contains(player.queue_play_pos)) {
+        player.song_id = id;
+        player.queue_play_pos = {-1, -1};
+      }
+
+      player.held_left_mb_down = left_mb;
+
+
+      window.draw(queue_entry_shadow);
+      window.draw(queue_entry_background);
+      if (!draw_queue_play) {
+        window.draw(queue_cover_shadow);
+      }
+      window.draw(queue_entry_duration);
+      window.draw(queue_cover);
+      if (draw_queue_play) {
+        window.draw(queue_play);
+      }
+      window.draw(queue_title);
+      window.draw(queue_artist);
+
+      if (id != player.song_id) idx++;
+      if (idx >= queue_items) break; // Display a limited amount of queue
+    }
+
+    if (idx == 0) { // Nothing was shown
+      sf::Text nothing_exists(default_font, "");
+      if (search_active) {
+        nothing_exists.setString("No song was found");
+      }
+      else {
+        nothing_exists.setString("Empty playlist");
+      }
+
+      nothing_exists.setFillColor(light_text_color);
+      nothing_exists.setCharacterSize(18);
+      nothing_exists.setPosition({player_data.queue_background.getGlobalBounds().size.x / 2 - nothing_exists.getGlobalBounds().size.x / 2, 100.f});
+
+      window.draw(nothing_exists);
+    }
+  }
+
+  window.display();
+}
