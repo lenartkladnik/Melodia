@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(CMakeSFMLProject LANGUAGES CXX)
+project(Melodia LANGUAGES CXX)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -12,9 +12,9 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
-add_executable(main src/main.cpp include/data.cpp include/menus.cpp include/RoundedRectangleShape.cpp include/animation.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp include/data.cpp include/menus.cpp include/RoundedRectangleShape.cpp include/animation.cpp)
 
-target_compile_features(main PRIVATE cxx_std_17)
-target_link_libraries(main PRIVATE SFML::Graphics SFML::Audio)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
+target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Audio)
 
-target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

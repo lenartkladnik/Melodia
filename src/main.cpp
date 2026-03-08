@@ -12,6 +12,8 @@ using namespace sf;
 sf::Clock sf_clock;
 
 int main(int argc, char *argv[]) {
+  // Load some assets
+
   sf::Image icon;
   if (!icon.loadFromFile("misc/icon.png")) {
     std::cerr << "Error: Failed to load 'misc/icon.png'." << std::endl;
@@ -20,14 +22,6 @@ int main(int argc, char *argv[]) {
   window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
   MenuData menu_data;
-  menu_data.type = MenuData::Player;
-  menu_data.data = MenuData::PlayerData();
-
-  // Temporary, set the values for PlayerData. These will later be handled by the song selector.
-  std::get<MenuData::PlayerData>(menu_data.data).playlist = "tmp";
-  std::get<MenuData::PlayerData>(menu_data.data).queue = get_playlist(std::get<MenuData::PlayerData>(menu_data.data).playlist);
-  std::get<MenuData::PlayerData>(menu_data.data).song_id = get_start_song(std::get<MenuData::PlayerData>(menu_data.data).queue);
-  // -------------------------
 
   auto open_queue = [](auto* player, auto speed){
     player->data->queue_toggle.setTexture(*player->data->side_contract_tex);
@@ -53,12 +47,12 @@ int main(int argc, char *argv[]) {
 
     animate_move_x(
     player->data->queue_background,
-    50.f - player->data->queue_background.getGlobalBounds().size.x,
+    queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x,
       -speed
     );
     animate_move_x(
     player->data->queue_background_shadow,
-    50.f - player->data->queue_background.getGlobalBounds().size.x + shadow_offset,
+    queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x + shadow_offset,
       -speed
     );
   };
@@ -87,6 +81,9 @@ int main(int argc, char *argv[]) {
           }
 
           auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+          if (player.dragging_queue == -1)
+            player.reset_cursor = true; // Reset the value to true on each iteration
 
           // Keyboard controls (turned off when player.search_active)
           if (!player.search_active) {
@@ -235,6 +232,10 @@ int main(int argc, char *argv[]) {
                 player.cursor_pos = 0;
               }
 
+              else if (player.data->playlist_selector.getGlobalBounds().contains(pos) && !player.data->queue_expanded) { // Clicked on the playlist selector
+                std::cout << "TODO: Playlist selector" << std::endl;
+              }
+
               // ----------
               // All inputs for the queue are handled in the menus.cpp file where the queue is generated on the fly
               // ----------
@@ -344,7 +345,7 @@ int main(int argc, char *argv[]) {
             queue_was_open = player.data->queue_expanded;
           }
 
-          player.song_path = construct_song_path(player.playlist, player.song_id);
+          player.song_path = construct_song_path(player.song_id);
 
           if (!player.music.load(player.song_path + ".ogg")) {
             continue;
@@ -367,6 +368,7 @@ int main(int argc, char *argv[]) {
 
         if (player.data->search_background.getGlobalBounds().contains(pos)) {
           window.setMouseCursor(text_cursor);
+          player.reset_cursor = false;
         }
         else if (
             player.data->main_control.getGlobalBounds().contains(pos) ||
@@ -381,11 +383,15 @@ int main(int argc, char *argv[]) {
             player.data->vol_icon.getGlobalBounds().contains(pos) ||
             player.data->vol_slider.getGlobalBounds().contains(pos) ||
             player.data->live.getGlobalBounds().contains(pos) ||
-            player.data->cancel_queue_search.getGlobalBounds().contains(pos)
+            player.data->cancel_queue_search.getGlobalBounds().contains(pos) ||
+            !player.reset_cursor
           ) {
+
           window.setMouseCursor(hand_cursor);
+
+          player.reset_cursor = false;
         }
-        else {
+        else if (player.reset_cursor) {
           window.setMouseCursor(default_cursor);
         }
 

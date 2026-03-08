@@ -1,10 +1,10 @@
-#include <filesystem>
 #include <vector>
 #include <string>
 #include <sstream>
 #include <algorithm>
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <fstream>
 #include <random>
 #include <cctype>
 
@@ -22,16 +22,17 @@ extern const float shadow_offset = 10.f;
 extern const float small_shadow_offset = 5.f;
 extern const float slider_threshold = 0.015;
 extern const float queue_cover_size = 100.f;
-extern const std::string base_path = ".music_data/";
-extern const int queue_items = 10;
+extern const std::string base_data_path = ".music_data/";
+extern const int queue_items = 6;
 extern const float move_speed = 20.f;
 extern const float match_diff = 3.f;
 extern const int queue_search_max_char = 28;
 extern const int queue_max_char = 26;
+extern const float queue_contracted_width = 50.f;
 
 extern const sf::Vector2u window_base_size({1920, 1080});
 extern const sf::ContextSettings settings{.antiAliasingLevel = 8};
-extern sf::RenderWindow window(sf::VideoMode(window_base_size), "Music Player", sf::Style::Default, sf::State::Windowed, settings);
+sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed, settings);
 extern const sf::Vector2u window_size = window.getSize();
 
 extern const sf::Color main_color({179, 126, 25});
@@ -40,6 +41,8 @@ extern const sf::Color background_color({196, 186, 189});
 extern const sf::Color dark_background_color({156, 146, 149});
 extern const sf::Color background_shadow_color({176, 166, 169});
 extern const sf::Color dark_background_shadow_color({153, 144, 147});
+extern const sf::Color background_shadow_color_transparent({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
+extern const sf::Color dark_background_shadow_color_transparent({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
 extern const sf::Color progress_color(212, 201, 204);
 extern const sf::Color text_color({10, 10, 10});
 extern const sf::Color light_text_color({80, 80, 80});
@@ -56,10 +59,11 @@ std::mt19937 rand_generator(rd());
 
 std::vector<int> get_playlist(const std::string& name) {
   std::vector<int> ids;
+  std::string entry;
+  std::ifstream playlist_file(base_data_path + "playlists/" + name);
 
-  for (const auto& entry : std::filesystem::directory_iterator(base_path + name)) {
-    std::string id_s = entry.path().stem().string();
-    int id = std::stoi(id_s);
+  while (std::getline(playlist_file, entry)) {
+    int id = std::stoi(entry);
 
     if (std::find(ids.begin(), ids.end(), id) == ids.end())
       ids.push_back(id);
@@ -70,8 +74,8 @@ std::vector<int> get_playlist(const std::string& name) {
   return ids;
 }
 
-std::string construct_song_path(const std::string& playlist, int id) {
-  return base_path + playlist + "/" + std::to_string(id);
+std::string construct_song_path(int id) {
+  return base_data_path + "data/" + std::to_string(id);
 }
 
 void done_playing(std::vector<int>& playlist, std::vector<int>& past) {

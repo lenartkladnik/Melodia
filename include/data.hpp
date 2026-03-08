@@ -25,12 +25,13 @@ extern const float shadow_offset;
 extern const float small_shadow_offset;
 extern const float slider_threshold;
 extern const float queue_cover_size;
-extern const std::string base_path;
+extern const std::string base_data_path;
 extern const int queue_items;
 extern const float move_speed;
 extern const float match_diff;
 extern const int queue_search_max_char;
 extern const int queue_max_char;
+extern const float queue_contracted_width;
 
 extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings settings;
@@ -43,6 +44,8 @@ extern const sf::Color background_color;
 extern const sf::Color dark_background_color;
 extern const sf::Color background_shadow_color;
 extern const sf::Color dark_background_shadow_color;
+extern const sf::Color background_shadow_color_transparent;
+extern const sf::Color dark_background_shadow_color_transparent;
 extern const sf::Color progress_color;
 extern const sf::Color text_color;
 extern const sf::Color light_text_color;
@@ -57,7 +60,7 @@ extern const sf::Cursor hand_cursor;
 // Function definitions for data.cpp
 
 std::vector<int> get_playlist(const std::string& name);
-std::string construct_song_path(const std::string& playlist, int id);
+std::string construct_song_path(int id);
 void done_playing(std::vector<int>& playlist, std::vector<int>& past);
 std::string char32_to_utf8(char32_t c32);
 bool matching(const std::string& s1, const std::string& s2, float diff, const char split = ' ');
@@ -216,6 +219,8 @@ struct StaticPlayerData {
   std::string search_string;
   std::shared_ptr<sf::Texture> cancel_queue_search_tex;
   sf::Sprite cancel_queue_search;
+  sf::Sprite playlist_selector;
+  sf::Text playlist_data;
 };
 
 struct MenuData {
@@ -238,6 +243,8 @@ struct MenuData {
       size_t cursor_pos = 0;
       bool live_mode = false;
       bool held_left_mb_down = false;
+      bool reset_cursor = true;
+      int dragging_queue = -1;
       sf::Vector2f queue_play_pos;
       std::string song_path;
       std::string playlist; // Needs to be set manually

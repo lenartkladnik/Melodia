@@ -2,8 +2,20 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 #include "RoundedRectangleShape.hpp"
 #include "data.hpp"
+
+void switch_to_player(const MenuData& menu_data) {
+  menu_data.type = MenuData::Player;
+  menu_data.data = MenuData::PlayerData();
+
+  // Temporary, set the values for PlayerData. These will later be handled by the song selector.
+  std::get<MenuData::PlayerData>(menu_data.data).playlist = "tmp";
+  std::get<MenuData::PlayerData>(menu_data.data).queue = get_playlist(std::get<MenuData::PlayerData>(menu_data.data).playlist);
+  std::get<MenuData::PlayerData>(menu_data.data).song_id = get_start_song(std::get<MenuData::PlayerData>(menu_data.data).queue);
+  // -------------------------
+}
 
 StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_path, const std::string& playlist) {
   auto half = (float)(window_size.x / 2);
@@ -145,7 +157,43 @@ StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_p
   control_corner_shadow.setPosition({control_corner.getPosition().x + shadow_offset, control_corner.getPosition().y + shadow_offset});
   control_corner_shadow.setFillColor(dark_main_color);
 
+  sf::RoundedRectangleShape queue_background({500.f, window_size.y - 40.f}, out_round, main_n);
+  queue_background.setPosition({queue_contracted_width - queue_background.getGlobalBounds().size.x, 20.f});
+  queue_background.setFillColor(background_color);
+
+  sf::RoundedRectangleShape queue_background_shadow(queue_background.getGlobalBounds().size, out_round, main_n);
+  queue_background_shadow.setPosition({queue_background.getPosition().x + shadow_offset, queue_background.getPosition().y + shadow_offset});
+  queue_background_shadow.setFillColor(dark_main_color);
+
+  sf::RoundedRectangleShape search_background({queue_background.getGlobalBounds().size.x - 100.f, 40.f}, 20, main_n);
+  search_background.setPosition({50.f, queue_background.getPosition().y + 10.f});
+  search_background.setFillColor(dark_background_color);
+
+  sf::Text search_before_cursor(default_font, "Search");
+  search_before_cursor.setPosition({search_background.getPosition().x + 10.f, search_background.getPosition().y + 6.f});
+  search_before_cursor.setCharacterSize(20);
+  search_before_cursor.setFillColor(light_text_color);
+
+  sf::Text search_after_cursor(default_font, "");
+  search_after_cursor.setCharacterSize(20);
+  search_after_cursor.setFillColor(text_color);
+
   float control_corner_gap = 15.f;
+
+  auto side_expand_tex = std::make_shared<sf::Texture>();
+  if (!side_expand_tex->loadFromFile("misc/side_expand.png")) {
+    std::cerr << "Error: Failed to load 'misc/side_expand.png'." << std::endl;
+  }
+  side_expand_tex->setSmooth(true);
+
+  auto side_contract_tex = std::make_shared<sf::Texture>();
+  if (!side_contract_tex->loadFromFile("misc/side_contract.png")) {
+    std::cerr << "Error: Failed to load 'misc/side_contract.png'." << std::endl;
+  }
+  side_contract_tex->setSmooth(true);
+
+  sf::Sprite queue_toggle(*side_expand_tex);
+  queue_toggle.setPosition({0.f, queue_background.getPosition().y + 6.f});
 
   auto favorite_empty_tex = std::make_shared<sf::Texture>();
   if (!favorite_empty_tex->loadFromFile("misc/favorite_empty.png")) {
@@ -171,6 +219,9 @@ StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_p
   sf::Sprite manage_playlist(*manage_playlist_tex);
   manage_playlist.setPosition({favorite.getPosition().x + favorite.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
+  sf::Sprite playlist_selector(*manage_playlist_tex);
+  playlist_selector.setPosition({queue_toggle.getPosition().x + 8.f, queue_toggle.getPosition().y + queue_toggle.getGlobalBounds().size.y + 6.f});
+
   auto trash_tex = std::make_shared<sf::Texture>();
   if (!trash_tex->loadFromFile("misc/trash.png")) {
     std::cerr << "Error: Failed to load 'misc/trash.png'." << std::endl;
@@ -189,42 +240,6 @@ StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_p
   sf::Sprite edit(*edit_tex);
   edit.setPosition({trash.getPosition().x + trash.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
-  auto side_expand_tex = std::make_shared<sf::Texture>();
-  if (!side_expand_tex->loadFromFile("misc/side_expand.png")) {
-    std::cerr << "Error: Failed to load 'misc/side_expand.png'." << std::endl;
-  }
-  side_expand_tex->setSmooth(true);
-
-  auto side_contract_tex = std::make_shared<sf::Texture>();
-  if (!side_contract_tex->loadFromFile("misc/side_contract.png")) {
-    std::cerr << "Error: Failed to load 'misc/side_contract.png'." << std::endl;
-  }
-  side_contract_tex->setSmooth(true);
-
-  sf::Sprite queue_toggle(*side_expand_tex);
-  queue_toggle.setPosition({0.f, 26.f});
-
-  sf::RoundedRectangleShape queue_background({500.f, window_size.y - 40.f}, out_round, main_n);
-  queue_background.setPosition({50.f - queue_background.getGlobalBounds().size.x, 20.f});
-  queue_background.setFillColor(background_color);
-
-  sf::RoundedRectangleShape queue_background_shadow(queue_background.getGlobalBounds().size, out_round, main_n);
-  queue_background_shadow.setPosition({queue_background.getPosition().x + shadow_offset, queue_background.getPosition().y + shadow_offset});
-  queue_background_shadow.setFillColor(dark_main_color);
-
-  sf::RoundedRectangleShape search_background({queue_background.getGlobalBounds().size.x - 100.f, 40.f}, 20, main_n);
-  search_background.setPosition({50.f, queue_background.getPosition().y + 10.f});
-  search_background.setFillColor(dark_background_color);
-
-  sf::Text search_before_cursor(default_font, "Search");
-  search_before_cursor.setPosition({search_background.getPosition().x + 10.f, search_background.getPosition().y + 6.f});
-  search_before_cursor.setCharacterSize(20);
-  search_before_cursor.setFillColor(light_text_color);
-
-  sf::Text search_after_cursor(default_font, "");
-  search_after_cursor.setCharacterSize(20);
-  search_after_cursor.setFillColor(text_color);
-
   auto cancel_queue_search_tex = std::make_shared<sf::Texture>();
   if (!cancel_queue_search_tex->loadFromFile("misc/close.png")) {
     std::cerr << "Error: Failed to load 'misc/close.png'." << std::endl;
@@ -233,6 +248,14 @@ StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_p
 
   sf::Sprite cancel_queue_search(*cancel_queue_search_tex);
   cancel_queue_search.setPosition({search_background.getPosition().x + search_background.getGlobalBounds().size.x - cancel_queue_search.getGlobalBounds().size.x - 14.f, search_background.getPosition().y + 9.f});
+
+  sf::Text playlist_data(default_font, "");
+  playlist_data.setCharacterSize(20);
+  playlist_data.setFillColor(light_text_color);
+  playlist_data.setPosition({
+    queue_contracted_width / 2 - 10.f,
+    queue_background.getPosition().y + queue_background.getGlobalBounds().size.y - 30.f
+  });
 
   return StaticPlayerData {
     cover,
@@ -286,11 +309,11 @@ StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_p
     live,
     "",
     cancel_queue_search_tex,
-    cancel_queue_search
+    cancel_queue_search,
+    playlist_selector,
+    playlist_data
   };
 }
-
-// if (player.show_cursor) window.draw(player.data->cursor);
 
 void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
   auto& player_data = *player.data;
@@ -405,29 +428,91 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
     sf::Sprite queue_play(queue_play_tex);
 
+    auto get_queue_entry_position = [player_data](int index) {
+      return player_data.search_background.getPosition().y + player_data.search_background.getGlobalBounds().size.y + 20.f + (queue_cover_size + 20.f) * index;
+    };
 
     bool search_active = !player_data.search_string.empty();
     if (search_active) {
       window.draw(player_data.cancel_queue_search);
     }
 
+    // Dynamically set the attributes for these objects since player.queue can change at any time
+
+    auto draw_ready_queue = player.queue;
+
+    int new_idx = -1;
+
+    // Move the queue entry being dragged to the bottom so it will be drawn above all other items
+    if (player.dragging_queue != -1) {
+      auto dragging_queue_iter = std::find(draw_ready_queue.begin(), draw_ready_queue.end(), player.dragging_queue);
+      if (dragging_queue_iter != draw_ready_queue.end()) {
+        draw_ready_queue.erase(dragging_queue_iter);
+        draw_ready_queue.push_back(player.dragging_queue);
+      }
+
+      // Calculate the apparent index of the dragging queue entry
+      auto relative_pos = (window.mapPixelToCoords(sf::Mouse::getPosition(window)).y - queue_entry_background.getGlobalBounds().size.y / 2) / player_data.queue_background.getGlobalBounds().size.y;
+      if (relative_pos > 1) {
+        std::cout << "TODO: Handle scrolling with dragging queue entry" << std::endl;
+      }
+      else {
+        new_idx = round(relative_pos * (player_data.queue_background.getGlobalBounds().size.y / (queue_entry_background.getGlobalBounds().size.y + small_shadow_offset)));
+        new_idx = std::clamp(new_idx, 1, static_cast<int>(draw_ready_queue.size()) - 1);
+      }
+    }
+
+    // Move the current playing song to the top
+    auto current_playing_iter = std::find(draw_ready_queue.begin(), draw_ready_queue.end(), player.song_id);
+    if (current_playing_iter != draw_ready_queue.end()) {
+      draw_ready_queue.erase(current_playing_iter);
+      draw_ready_queue.insert(draw_ready_queue.begin(), player.song_id);
+    }
+
+    if (new_idx != -1) {
+      draw_ready_queue.insert(draw_ready_queue.begin() + new_idx, -1); // Blank space
+    }
+
+    bool not_found = true;
     int idx = 0;
-    for (const int id : player.queue) {
-      auto queue_song_path = construct_song_path(player_data.playlist, id);
+    for (const int id : draw_ready_queue) {
+      if (id == -1) { // -1 means blank space
+        idx += 1;
+        if (idx >= queue_items) break;
+        continue;
+      }
+
+      auto queue_song_path = construct_song_path(id);
       MusicPlayer queue_entry_player;
       queue_entry_player.load(queue_song_path + ".ogg");
 
       queue_cover.setScale({1, 1}); // Reset scale because of the hover effect
 
-      if (!queue_cover_texture.loadFromFile(queue_song_path + ".small.png")) {
+      sf::Image queue_cover_image;
+      if (!queue_cover_image.loadFromFile(queue_song_path + ".small.png")) {
         std::cerr << "Error: Failed to load '" << queue_song_path << ".small.png" << "'." << std::endl;
       }
+
+      if (id == player.dragging_queue) {
+        for (unsigned int y = 0; y < queue_cover_image.getSize().y; y++) {
+          for (unsigned int x = 0; x < queue_cover_image.getSize().x; x++) {
+            auto pixel = queue_cover_image.getPixel({x, y});
+            pixel.a = 128;
+
+            queue_cover_image.setPixel({x, y}, pixel);
+          }
+        }
+      }
+
+      sf::Texture queue_cover_texture(queue_cover_image);
       queue_cover_texture.setSmooth(true);
 
       queue_cover.setTexture(&queue_cover_texture);
       queue_cover.setPosition({
         10.f,
-        player_data.search_background.getPosition().y + player_data.search_background.getGlobalBounds().size.y + 20.f + (queue_cover_size + 20.f) * (id == player.song_id ? 0 : idx + 1) // +1 makes space for the current playing song
+        player.dragging_queue == id ?
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)).y - queue_entry_background.getGlobalBounds().size.y / 2:
+          get_queue_entry_position(idx) // +1 makes space for the current playing song
       });
 
       std::ifstream artist_file(queue_song_path + ".artist");
@@ -485,6 +570,10 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
         queue_entry_background.setFillColor(dark_background_shadow_color);
         queue_entry_shadow.setFillColor(background_shadow_color);
       }
+      else if (id == player.dragging_queue) {
+        queue_entry_background.setFillColor(background_shadow_color_transparent);
+        queue_entry_shadow.setFillColor(dark_background_shadow_color_transparent);
+      }
       else {
         queue_entry_background.setFillColor(background_shadow_color);
         queue_entry_shadow.setFillColor(dark_background_shadow_color);
@@ -495,41 +584,82 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
       bool draw_queue_play = false;
 
-      if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
-        queue_entry_duration.setString("...");
-        queue_entry_duration.setFillColor(text_color);
-        queue_entry_duration.move({0.f, -6.f});
+      if (player.dragging_queue == -1) { // Only show hover effects when not dragging an item
+        if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
+          queue_entry_duration.setString("\n...\n"); // Add the newlines to create a bigger clickable area
+          queue_entry_duration.setFillColor(text_color);
+          queue_entry_duration.move({0.f, -24.f});
 
-        if (id != player.song_id) {
-          draw_queue_play = true;
-          queue_play.setPosition({
-            queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x / 2 - queue_play.getGlobalBounds().size.x / 2,
-            queue_cover.getPosition().y + queue_cover.getGlobalBounds().size.y / 2 - queue_play.getGlobalBounds().size.y / 2
-          });
+          if (id != player.song_id) {
+            draw_queue_play = true;
+            queue_play.setPosition({
+              queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x / 2 - queue_play.getGlobalBounds().size.x / 2,
+              queue_cover.getPosition().y + queue_cover.getGlobalBounds().size.y / 2 - queue_play.getGlobalBounds().size.y / 2
+            });
 
-          queue_cover.setScale({0.45, 0.45}); // Scale is reset at the top
-          queue_cover.move({24.f, 28.f});
+            queue_cover.setScale({0.45, 0.45}); // Scale is reset at the top
+            queue_cover.move({24.f, 28.f});
+          }
+        }
+        else {
+          // Reset
+          queue_entry_duration.setFillColor(light_text_color);
+        }
+
+        if (
+            (draw_queue_play && queue_play.getGlobalBounds().contains(mouse_pos)) ||
+            queue_entry_duration.getGlobalBounds().contains(mouse_pos)
+          ) {
+
+          window.setMouseCursor(hand_cursor);
+
+          player.reset_cursor = false;
         }
       }
-      else {
-        // Reset
-        queue_entry_duration.setFillColor(light_text_color);
+
+      if (player.dragging_queue != -1) {
+        window.setMouseCursor(hand_cursor);
+
+        player.reset_cursor = false;
       }
 
       // Click checks
 
-      auto left_mb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
-
-      if (!player.held_left_mb_down && left_mb) {
+      if (!player.held_left_mb_down && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
         player.queue_play_pos = mouse_pos;
-      }
 
       if (draw_queue_play && player.queue_play_pos.x != -1 && queue_play.getGlobalBounds().contains(player.queue_play_pos)) {
         player.song_id = id;
         player.queue_play_pos = {-1, -1};
       }
+      else if (player.dragging_queue == -1 && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) && queue_entry_duration.getGlobalBounds().contains(mouse_pos)) {
+        std::cout << "TODO: Clicked ... menu in queue on id: " << id << std::endl;
+      }
+      else if (
+          player.queue_play_pos.x != -1 &&
+          id != player.song_id &&
+          player.dragging_queue == -1 &&
+          sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) &&
+          queue_entry_background.getGlobalBounds().contains(player.queue_play_pos)
+        ) {
 
-      player.held_left_mb_down = left_mb;
+        player.dragging_queue = id;
+      }
+      else {
+        // Reset
+        if (player.dragging_queue != -1 && !sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
+          if (new_idx != -1) {
+            player.queue.erase(std::find(player.queue.begin(), player.queue.end(), player.dragging_queue));
+            player.queue.insert(player.queue.begin() + new_idx - 1, player.dragging_queue);
+            std::cout << "new_idx: " << new_idx << std::endl;
+            std::cout << "dragging_queue: " << player.dragging_queue << std::endl;
+          }
+
+          player.dragging_queue = -1;
+        }
+      }
+
+      player.held_left_mb_down = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 
 
       window.draw(queue_entry_shadow);
@@ -545,11 +675,17 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       window.draw(queue_title);
       window.draw(queue_artist);
 
-      if (id != player.song_id) idx++;
+
+      not_found = false;
+      idx++;
       if (idx >= queue_items) break; // Display a limited amount of queue
     }
 
-    if (idx == 0) { // Nothing was shown
+    if (player.reset_cursor) {
+      window.setMouseCursor(default_cursor);
+    }
+
+    if (not_found) { // Nothing was shown
       sf::Text nothing_exists(default_font, "");
       if (search_active) {
         nothing_exists.setString("No song was found");
@@ -564,7 +700,18 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
       window.draw(nothing_exists);
     }
+
+    player_data.playlist_data.setString(player.playlist);
   }
+  else {
+    // Queue contracted
+
+    player_data.playlist_data.setString(std::to_string(player.playlist.size() + 1));
+
+    window.draw(player_data.playlist_selector);
+  }
+
+  window.draw(player_data.playlist_data);
 
   window.display();
 }
