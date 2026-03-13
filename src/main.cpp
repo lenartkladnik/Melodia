@@ -23,6 +23,8 @@ int main(int argc, char *argv[]) {
 
   MenuData menu_data;
 
+  switch_to_player(menu_data);
+
   auto open_queue = [](auto* player, auto speed){
     player->data->queue_toggle.setTexture(*player->data->side_contract_tex);
     player->data->queue_expanded = true;

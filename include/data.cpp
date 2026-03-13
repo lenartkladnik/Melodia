@@ -31,8 +31,7 @@ extern const int queue_max_char = 26;
 extern const float queue_contracted_width = 50.f;
 
 extern const sf::Vector2u window_base_size({1920, 1080});
-extern const sf::ContextSettings settings{.antiAliasingLevel = 8};
-sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed, settings);
+sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed);
 extern const sf::Vector2u window_size = window.getSize();
 
 extern const sf::Color main_color({179, 126, 25});

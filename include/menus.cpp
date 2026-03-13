@@ -6,7 +6,7 @@
 #include "RoundedRectangleShape.hpp"
 #include "data.hpp"
 
-void switch_to_player(const MenuData& menu_data) {
+void switch_to_player(MenuData& menu_data) {
   menu_data.type = MenuData::Player;
   menu_data.data = MenuData::PlayerData();
 
