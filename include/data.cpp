@@ -5,8 +5,10 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <random>
 #include <cctype>
+#include <sys/stat.h>
 
 extern const float padding_top = 100.f;
 extern const float offset = 50.f;
@@ -22,13 +24,24 @@ extern const float shadow_offset = 10.f;
 extern const float small_shadow_offset = 5.f;
 extern const float slider_threshold = 0.015;
 extern const float queue_cover_size = 100.f;
-extern const std::string base_data_path = ".music_data/";
+extern const float selector_cover_size = 200.f;
+extern const sf::Vector2f selector_size = {350.f, selector_cover_size};
+extern const std::string base_path = "./";
+extern const std::string base_path_misc = base_path + "misc/";
+extern const std::string base_music_path = ".music_data/";
+extern const std::string base_music_path_data = base_music_path + "data/";
+extern const std::string base_music_path_playlists = base_music_path + "playlists/";
 extern const int queue_items = 6;
 extern const float move_speed = 20.f;
 extern const float match_diff = 3.f;
-extern const int queue_search_max_char = 28;
+extern const int player_search_max_char = 28;
+extern const int playlist_search_max_char = 46;
+int search_max_char = 0;
 extern const int queue_max_char = 26;
 extern const float queue_contracted_width = 50.f;
+extern const float control_corner_gap = 15.f;
+
+sf::Font default_font(base_path_misc + "JetBrainsMono-Regular.ttf");
 
 extern const sf::Vector2u window_base_size({1920, 1080});
 sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed);
@@ -53,13 +66,38 @@ extern const sf::Cursor default_cursor = sf::Cursor::createFromSystem(sf::Cursor
 extern const sf::Cursor text_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Text).value();
 extern const sf::Cursor hand_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Hand).value();
 
+bool search_active = false;
+bool show_cursor = false;
+size_t cursor_pos = 0;
+bool held_left_mb_down = false;
+bool reset_cursor = true;
+std::string search_string = "";
+
 std::random_device rd;
 std::mt19937 rand_generator(rd());
+
+std::vector<std::string> get_all_playlists() {
+  std::vector<std::string> playlists;
+
+  struct stat s;
+  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_playlists)) {
+    auto path = entry.path();
+    auto str_path = path.string();
+
+    // First check that the path doesn't contain a dot, because the playlist files don't
+    // have an extension. Then check that the path is a file and not a directory.
+    if (path.filename().string().find(".") == std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
+      playlists.push_back(path.stem());
+    }
+  }
+
+  return playlists;
+}
 
 std::vector<int> get_playlist(const std::string& name) {
   std::vector<int> ids;
   std::string entry;
-  std::ifstream playlist_file(base_data_path + "playlists/" + name);
+  std::ifstream playlist_file(base_music_path_playlists + name);
 
   while (std::getline(playlist_file, entry)) {
     int id = std::stoi(entry);
@@ -74,7 +112,7 @@ std::vector<int> get_playlist(const std::string& name) {
 }
 
 std::string construct_song_path(int id) {
-  return base_data_path + "data/" + std::to_string(id);
+  return base_music_path_data + std::to_string(id);
 }
 
 void done_playing(std::vector<int>& playlist, std::vector<int>& past) {
@@ -106,7 +144,6 @@ int get_start_song(std::vector<int>& playlist) {
 
   int id = distr(rand_generator);
   int i = 0;
-
   while (id == forbidden) {
     id = distr(rand_generator);
     i++;

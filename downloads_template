@@ -1,0 +1,117 @@
+-- https://stackoverflow.com/a/79575583 --
+
+yt-dlp -I 1 "https://music.youtube.com/search?q=[artist_name here+song_name here]" -xciw -f "bestaudio/best" --audio-format mp3 --audio-quality 0 --add-metadata --metadata-from-title "%(artist)s - %(title)s" -o "%(artist)s - %(title)s.%(ext)s"
+
+-- Get cover art (from musicplayer.py) --
+    def _addFromGenius(self, search_string: str, get_lyrics: bool = True) -> list[str]:
+        success = True
+
+        try:
+            title, artists = search_string.split(' by ')
+        except:
+            title, artists = ('', '')
+        search_string = cleanTitleArtist(search_string).lower().split(', ')[0]
+
+        resources.debug(f"Querying Genius API with q={search_string}")
+
+        template = "https://genius.com/api/search/multi?experiment=not-eligible&per_page=5&q=" + urllib.parse.quote(search_string)
+
+        r = requests.get(template)
+
+        if r.status_code != 200:
+            print_(resources.ESCAPE_CODE + f"[38;5;203mFailed to download lyrics and cover art for '{search_string}'." + resources.ESCAPE_CODE + "[0m")
+            return ['', '']
+
+        json_r = r.json()
+
+        result = {}
+        for section in json_r['response']['sections']:
+            if section['type'] == 'song':
+                for hit in section['hits']:
+                    hit_title = hit['result']['title']
+                    hit_artist = hit['result']['primary_artist']['name']
+
+                    if title and artists:
+                        if title.lower() in hit_title.lower() and artists.lower() in hit_artist.lower():
+                            result = hit['result']
+
+                    else:
+                        title, artists = (hit_title, hit_artist)
+                        result = hit['result']
+                        break
+
+        if not result:
+            resources.debug("Couldn't get accurate result from Genius API, trying a more general approach.", 'warn')
+            result = json_r["response"]["sections"][0]["hits"][0]["result"]
+
+        cover_art_url = ""
+        if result:
+            for i in ["header_image_url", "cover_art_url", "header_image_thumbnail_url", "song_art_image_thumbnail_url"]:
+                try:
+                    cover_art_url = result[i]
+                    break
+                except KeyError:
+                    pass
+
+        resources.debug(f"Got cover art url: {cover_art_url}")
+
+        b64rep = b64encode(f"{title} by {artists}".encode(self.title_encoding)).decode()
+
+        coverArt = CoverArt()
+        try:
+            coverArt.saveFromUrl(cover_art_url, f'{self.cover_art_fp}/{b64rep}.{self.ascii_cover_ext}', f'{self.cover_art_fp}/{b64rep}.{self.cover_ext}')
+        except Exception:
+            resources.debug(f'Got exception whilst getting cover art:')
+            resources.debug(traceback.format_exc())
+            print_(resources.ESCAPE_CODE + f"[38;5;203mFailed to get cover art for '{title} by {artists}'." + resources.ESCAPE_CODE + "[0m") 
+            success = False
+
+        if get_lyrics:
+            try:
+                lyrics = Lyrics().get(search_string.replace(' by ', ' - ', 1))
+                with open(f'{self.lyrics_fp}/{b64rep}.{self.lyrics_ext}', 'w') as f:
+                    f.write(lyrics)
+
+            except Exception:
+                resources.debug(f'Got exception whilst getting lyrics:')
+                resources.debug(traceback.format_exc())
+                print_(resources.ESCAPE_CODE + f"[38;5;203mFailed to get lyrics for '{title} by {artists}'." + resources.ESCAPE_CODE + "[0m")
+                success = False
+
+        try:
+            Image.open(resources.getSongDataPath(self.cover_art_fp, b64rep, self.cover_ext))
+        except UnidentifiedImageError:
+            if not resources.existsSongData(self.cover_art_fp, b64rep, self.cover_ext) and not resources.existsSongData(self.cover_art_fp, b64rep, self.ascii_cover_ext):
+                raise FileNotFoundError('Missing song data.')
+
+            os.remove(resources.getSongDataPath(self.cover_art_fp, b64rep, self.cover_ext))
+            os.remove(resources.getSongDataPath(self.cover_art_fp, b64rep, self.ascii_cover_ext))
+
+            Image.new('RGB', (1, 1), self.default_dc).save(resources.getSongDataPath(self.cover_art_fp, b64rep, self.cover_ext))
+            im = Image.open(resources.getSongDataPath(self.cover_art_fp, b64rep, self.cover_ext))
+            try:
+                dc = SpotifyBackgroundColor(np.array(im)).best_color()
+                resources.debug(f'Got background color: {dc}.')
+            except Exception:
+                resources.debug('Failed to get background color. Using white as default.', 'error', resources.ESCAPE_CODE + '[31m')
+                dc = self.default_dc
+
+            with open(resources.getSongDataPath(self.cover_art_fp, b64rep, self.ascii_cover_ext), 'w+') as f:
+                f.write(str(dc) + '\n')
+
+        except Exception:
+            resources.debug('Got exception whilst checking cover art:')
+            resources.debug(traceback.format_exc())
+
+        if success:
+            print_(resources.ESCAPE_CODE + f"[38;5;40mSuccessfully downloaded lyrics and cover art for '{title} by {artists}'." + resources.ESCAPE_CODE + "[0m")
+            resources.successes['cover_art'] += 1
+            resources.successes['lyrics'] += 1
+
+        else:
+            print_(resources.ESCAPE_CODE + f"[38;5;203mFailed to download lyrics and cover art for '{title} by {artists}'." + resources.ESCAPE_CODE + "[0m")
+
+        if resources.getch() == 'q':
+            self.exit()
+
+        return [title, artists]

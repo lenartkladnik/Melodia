@@ -12,7 +12,7 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
-add_executable(${PROJECT_NAME} src/main.cpp include/data.cpp include/menus.cpp include/RoundedRectangleShape.cpp include/animation.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp include/data.cpp include/menus.cpp include/player_menu.cpp include/playlist_selector_menu.cpp include/RoundedRectangleShape.cpp include/animation.cpp)
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 target_link_libraries(${PROJECT_NAME} PRIVATE SFML::Graphics SFML::Audio)

@@ -7,8 +7,15 @@
 #include "RoundedRectangleShape.hpp"
 #include "data.hpp"
 
-void switch_to_player(MenuData& menu_data);
-StaticPlayerData init_player(sf::RenderWindow& window, const std::string& song_path, const std::string& playlist);
-void display_player(MenuData::PlayerData& menu, sf::RenderWindow& window);
+StaticData init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos);
+
+void search_reset_cursor();
+void search_move_cursor_left();
+void search_move_cursor_right();
+void search_running(sf::Text& search_before_cursor, sf::Text& search_after_cursor);
+void search_input(char32_t input);
+void search_focus(sf::Vector2f& pos, sf::Text& search_before_cursor, sf::Text& search_after_cursor);
+void search_unfocus(sf::Text& search_before_cursor, sf::Text& search_after_cursor);
+void search_draw_cursor(sf::RenderWindow& window, sf::Text& search_before_cursor, sf::RoundedRectangleShape& search_background);
 
 #endif
