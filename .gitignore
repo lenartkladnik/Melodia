@@ -1,5 +1,5 @@
-debug/
-build/
 debug_build.sh
+.sconsign.dblite
+bin/
 todo/
 .music_data/

@@ -93,7 +93,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   int max_playlists_per_line = (int)(window.getSize().x / total_playlist_sel_size);
   float padding_to_center = (window_base_size.x - (total_playlist_sel_size * max_playlists_per_line)) / 2;
 
-  for (int i = 0; i < data.playlists.size(); i++) {
+  for (size_t i = 0; i < data.playlists.size(); i++) {
     sf::Vector2f cover_pos = {
       total_playlist_sel_size * (i % max_playlists_per_line) + padding_to_center + (cover_offset / 2),
       (selector_cover_size + selector_gap) * ((int)(i / max_playlists_per_line) + 1) + (cover_offset / 2)

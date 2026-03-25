@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <cmath>
 #include "RoundedRectangleShape.hpp"
 #include "data.hpp"
 #include "menus.hpp"

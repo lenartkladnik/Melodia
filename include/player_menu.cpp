@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <cmath>
 #include "RoundedRectangleShape.hpp"
 #include "data.hpp"
 #include "menus.hpp"
@@ -523,7 +524,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
         std::cerr << "Error: Failed to read artist name from '" << queue_song_path << ".artist" << "'.";
       }
 
-      if (artist_string.size() > queue_max_char) {
+      if ((int)artist_string.size() > queue_max_char) {
         artist_string.erase(queue_max_char - 3, artist_string.size());
         artist_string += "...";
       }
@@ -536,7 +537,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
         std::cerr << "Error: Failed to read title from '" << queue_song_path << ".title" << "'.";
       }
 
-      if (title_string.size() > queue_max_char) {
+      if ((int)title_string.size() > queue_max_char) {
         title_string.erase(queue_max_char - 3, title_string.size());
         title_string += "...";
       }
