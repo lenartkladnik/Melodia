@@ -40,8 +40,6 @@ extern const int queue_max_char;
 extern const float queue_contracted_width;
 extern const float control_corner_gap;
 
-extern sf::Font default_font;
-
 extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings settings;
 extern sf::RenderWindow window;

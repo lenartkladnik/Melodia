@@ -8,7 +8,7 @@
 #include "data.hpp"
 #include "menus.hpp"
 
-std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, const std::string& playlist) {
+std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, const std::string& playlist, sf::Font& default_font) {
   auto half = (float)(window_size.x / 2);
   auto third = (float)(window_size.x / 3);
 
@@ -256,7 +256,8 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   auto general = init_general(
     window,
     {queue_background.getGlobalBounds().size.x - 100.f, 40.f},
-    {50.f, queue_background.getPosition().y + 10.f}
+    {50.f, queue_background.getPosition().y + 10.f},
+    default_font
   );
 
 
@@ -272,11 +273,11 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     edit,
     vol_icon,
     live,
-    general.cancel_search,
+    general->cancel_search,
     artist,
     title,
-    general.search_before_cursor,
-    general.search_after_cursor,
+    general->search_before_cursor,
+    general->search_after_cursor,
     playlist_data,
     cover,
     cover_shadow,
@@ -301,7 +302,7 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     edit_tex,
     queue_background,
     queue_background_shadow,
-    general.search_background,
+    general->search_background,
     true,
     side_expand_tex,
     side_contract_tex,
@@ -313,13 +314,13 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     false,
     live_full_tex,
     live_empty_tex,
-    general.cancel_search_tex,
+    general->cancel_search_tex,
   });
 
   return spdata;
 }
 
-void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
+void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::Font& default_font) {
   auto& player_data = *player.data;
   auto& music = player.music;
 
@@ -713,7 +714,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
   window.display();
 }
 
-void switch_to_player(MenuData& menu_data, std::string playlist) {
+void switch_to_player(MenuData& menu_data, std::string playlist, sf::Font& default_font) {
   menu_data.data = MenuData::PlayerData();
   menu_data.type = MenuData::Player;
   search_max_char = player_search_max_char;
@@ -725,5 +726,5 @@ void switch_to_player(MenuData& menu_data, std::string playlist) {
   pd.song_id = get_start_song(pd.queue);
   pd.is_valid = true;
 
-  pd.data = init_player(window, construct_song_path(pd.song_id), playlist);
+  pd.data = init_player(window, construct_song_path(pd.song_id), playlist, default_font);
 }

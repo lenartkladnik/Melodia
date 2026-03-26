@@ -8,12 +8,13 @@
 #include "menus.hpp"
 #include "player_menu.hpp"
 
-std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
+std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window, sf::Font& default_font) {
   float search_size_x = 600.f;
   auto general = init_general(
     window,
     {search_size_x, 40.f},
-    {window.getSize().x / 2 - search_size_x / 2, 12.f}
+    {window.getSize().x / 2 - search_size_x / 2, 12.f},
+    default_font
   );
 
   // Playlist play overlay
@@ -54,12 +55,12 @@ std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   DTCache drawables_cache;
 
   return std::make_unique<StaticPlaylistSelectorData>(StaticPlaylistSelectorData {
-    general.search_background,
-    general.search_shadow,
-    general.search_before_cursor,
-    general.search_after_cursor,
-    general.cancel_search_tex,
-    general.cancel_search,
+    general->search_background,
+    general->search_shadow,
+    general->search_before_cursor,
+    general->search_after_cursor,
+    general->cancel_search_tex,
+    general->cancel_search,
     control_corner,
     control_corner_shadow,
     add_playlist_tex,
@@ -71,7 +72,7 @@ std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   });
 }
 
-bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window, MenuData& menu_data) {
+bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window, MenuData& menu_data, sf::Font& default_font) {
   auto& data = *playlist_sel.data;
 
   window.clear(main_color);
@@ -134,7 +135,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       if (draw_playlist_play && playlist_sel.playlist_play_pos.x != -1 && data.playlist_play.getGlobalBounds().contains(playlist_sel.playlist_play_pos)) { // Clicked on the play / playlist art image
         if (get_playlist(data.playlists[i]).size() > 0)
-          switch_to_player(menu_data, data.playlists[i]);
+          switch_to_player(menu_data, data.playlists[i], default_font);
         return false;
       }
 
@@ -194,14 +195,14 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   return true;
 }
 
-void switch_to_playlist_selector(MenuData& menu_data, sf::RenderWindow& window) {
+void switch_to_playlist_selector(MenuData& menu_data, sf::RenderWindow& window, sf::Font& default_font) {
   menu_data.data = MenuData::PlaylistSelectorData();
   menu_data.type = MenuData::PlaylistSelector;
 
   // Change the maximum string length for search
   search_max_char = playlist_search_max_char;
 
-  std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window);
+  std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window, default_font);
   std::get<MenuData::PlaylistSelector>(menu_data.data).is_valid = true;
 
   if (!std::get<MenuData::PlaylistSelectorData>(menu_data.data).is_valid || !std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {

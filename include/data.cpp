@@ -41,8 +41,6 @@ extern const int queue_max_char = 26;
 extern const float queue_contracted_width = 50.f;
 extern const float control_corner_gap = 15.f;
 
-sf::Font default_font(base_path_misc + "JetBrainsMono-Regular.ttf");
-
 extern const sf::Vector2u window_base_size({1920, 1080});
 sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed);
 extern const sf::Vector2u window_size = window.getSize();
@@ -87,7 +85,7 @@ std::vector<std::string> get_all_playlists() {
     // First check that the path doesn't contain a dot, because the playlist files don't
     // have an extension. Then check that the path is a file and not a directory.
     if (path.filename().string().find(".") == std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
-      playlists.push_back(path.stem());
+      playlists.push_back(path.stem().u8string());
     }
   }
 

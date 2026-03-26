@@ -17,13 +17,20 @@ int main(int argc, char *argv[]) {
   sf::Image icon;
   if (!icon.loadFromFile(base_path_misc + "icon.png")) {
     std::cerr << "Error: Failed to load '" << base_path_misc << "icon.png'." << std::endl;
+    return 1;
+  }
+
+  sf::Font default_font;
+  if (!default_font.openFromFile(base_path_misc + "JetBrainsMono-Regular.ttf")) {
+    std::cerr << "Error: Failed to load font 'JetBrainsMono-Regular.tff'." << std::endl;
+    return 1;
   }
 
   window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
   MenuData menu_data;
 
-  switch_to_playlist_selector(menu_data, window); // Start as the playlist selector
+  switch_to_playlist_selector(menu_data, window, default_font); // Start as the playlist selector
 
   auto open_queue = [](auto* player, auto speed){
     player->data->queue_toggle->setTexture(*player->data->side_contract_tex);
@@ -209,7 +216,7 @@ int main(int argc, char *argv[]) {
               }
 
               else if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) { // Clicked on the playlist selector
-                switch_to_playlist_selector(menu_data, window);
+                switch_to_playlist_selector(menu_data, window, default_font);
                 break;
               }
 
@@ -291,7 +298,7 @@ int main(int argc, char *argv[]) {
         }
         default:
           std::cerr << "Error: Invalid menu selected." << std::endl;
-          switch_to_playlist_selector(menu_data, window);
+          switch_to_playlist_selector(menu_data, window, default_font);
 
         break;
       }
@@ -356,7 +363,7 @@ int main(int argc, char *argv[]) {
           player.playing_song_id = player.song_id;
 
           player.music->play();
-          player.data = init_player(window, player.song_path, player.playlist);
+          player.data = init_player(window, player.song_path, player.playlist, default_font);
           player.data->cover.setTexture(player.data->cover_texture.get()); // Ensure the cover art texture is set
 
           // Reset state
@@ -399,7 +406,7 @@ int main(int argc, char *argv[]) {
           player.reset_cursor = true;
         }
 
-        if (player.data) display_player(player, window);
+        if (player.data) display_player(player, window, default_font);
         else player.playing_song_id = -1; // Something went wrong re-init
 
       break;
@@ -435,7 +442,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (playlist_sel.data) {
-          if (!display_playlist_selector(playlist_sel, window, menu_data)) break; // false returned when switched to new menu
+          if (!display_playlist_selector(playlist_sel, window, menu_data, default_font)) break; // false returned when switched to new menu
         }
 
       break;

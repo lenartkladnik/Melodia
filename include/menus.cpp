@@ -4,13 +4,14 @@
 #include <fstream>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include "RoundedRectangleShape.hpp"
 #include "data.hpp"
 #include "menus.hpp"
 
 sf::Clock cursor_clock;
 
-StaticData init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos) {
+std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos, sf::Font& default_font) {
   // Search
   sf::RoundedRectangleShape search_background(search_size, 20, main_n);
   search_background.setPosition(search_pos);
@@ -38,14 +39,14 @@ StaticData init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::
   sf::Sprite cancel_search(*cancel_search_tex);
   cancel_search.setPosition({search_background.getPosition().x + search_background.getGlobalBounds().size.x - cancel_search.getGlobalBounds().size.x - 14.f, search_background.getPosition().y + 9.f});
 
-  return StaticData {
+  return std::make_unique<StaticData>(StaticData {
     search_background,
     search_shadow,
     search_before_cursor,
     search_after_cursor,
     cancel_search_tex,
     cancel_search
-  };
+  });
 }
 
 void search_reset_cursor() {
@@ -95,7 +96,7 @@ void search_input(char32_t input) {
         break;
       }
     }
-    else if (search_string.size() < search_max_char) {
+    else if ((int)search_string.size() < search_max_char) {
       search_string.insert(cursor_pos, char32_to_utf8(input));
       cursor_pos++;
     }
