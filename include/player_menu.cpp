@@ -486,7 +486,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
 
       auto queue_song_path = construct_song_path(id);
       MusicPlayer queue_entry_player;
-      queue_entry_player.load(queue_song_path + ".ogg");
+      queue_entry_player.load(queue_song_path + ".mp3");
 
       queue_cover.setScale({1, 1}); // Reset scale because of the hover effect
 
@@ -653,8 +653,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
           if (new_idx != -1) {
             player.queue.erase(std::find(player.queue.begin(), player.queue.end(), player.dragging_queue));
             player.queue.insert(player.queue.begin() + new_idx - 1, player.dragging_queue);
-            std::cout << "new_idx: " << new_idx << std::endl;
-            std::cout << "dragging_queue: " << player.dragging_queue << std::endl;
           }
 
           player.dragging_queue = -1;

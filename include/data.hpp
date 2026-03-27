@@ -27,6 +27,7 @@ extern const float selector_cover_size;
 extern const sf::Vector2f selector_size;
 extern const std::string base_path;
 extern const std::string base_path_misc;
+extern const std::string base_path_external;
 extern const std::string base_music_path;
 extern const std::string base_music_path_data;
 extern const std::string base_music_path_playlists;
@@ -73,6 +74,7 @@ extern std::string search_string;
 
 // Function definitions for data.cpp
 
+std::string exec(const char* cmd);
 std::vector<std::string> get_all_playlists();
 std::vector<int> get_playlist(const std::string& name);
 std::string construct_song_path(int id);
@@ -81,8 +83,11 @@ std::string char32_to_utf8(char32_t c32);
 bool matching(const std::string& s1, const std::string& s2, float diff, const char split = ' ');
 int get_start_song(std::vector<int>& playlist);
 std::string seconds_to_human_readable(float seconds);
+bool download_song_from_query(const std::string& query);
 
-// Adapted from: https://en.sfml-dev.org/forums/index.php?topic=24133.0
+// Adapted from:
+// https://en.sfml-dev.org/forums/index.php?topic=24133.0
+
 class DrawformableObject {
  public:
   DrawformableObject(std::shared_ptr<sf::Drawable> drawable, std::shared_ptr<sf::Transformable> transformable) {
@@ -122,6 +127,8 @@ private:
   std::shared_ptr<sf::Drawable> drawable_;
   std::shared_ptr<sf::Transformable> transformable_;
 };
+
+// ====================================================================
 
 struct DTPair {
   std::shared_ptr<DrawformableObject> drawformable;

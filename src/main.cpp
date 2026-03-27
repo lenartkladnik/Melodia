@@ -28,6 +28,10 @@ int main(int argc, char *argv[]) {
 
   window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
+  // if (!download_song_from_query("Clint Eastwood")) {
+  //   std::cout << "Failed to download song" << std::endl;
+  // }
+
   MenuData menu_data;
 
   switch_to_playlist_selector(menu_data, window, default_font); // Start as the playlist selector
@@ -356,7 +360,7 @@ int main(int argc, char *argv[]) {
 
           player.song_path = construct_song_path(player.song_id);
 
-          if (!player.music->load(player.song_path + ".ogg")) {
+          if (!player.music->load(player.song_path + ".mp3")) {
             continue;
           }
 
