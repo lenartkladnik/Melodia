@@ -5,7 +5,8 @@
 #include <SFML/Audio.hpp>
 #include <string>
 #include <iostream>
-#include "RoundedRectangleShape.hpp"
+#include <thread>
+#include "../../external/lib/RoundedRectangleShape.hpp"
 
 // Constants
 
@@ -28,6 +29,7 @@ extern const sf::Vector2f selector_size;
 extern const std::string base_path;
 extern const std::string base_path_misc;
 extern const std::string base_path_external;
+extern const std::string base_path_external_prog;
 extern const std::string base_music_path;
 extern const std::string base_music_path_data;
 extern const std::string base_music_path_playlists;
@@ -71,19 +73,30 @@ extern size_t cursor_pos;
 extern bool held_left_mb_down;
 extern bool reset_cursor;
 extern std::string search_string;
+extern std::string prev_search_string;
+extern std::vector<int> search_results;
+extern std::string progress_bar_string;
+extern float progress_bar_amount;
+extern float progress_bar_total;
+extern std::unique_ptr<std::thread> download_song_thread;
+extern bool pause_main_input_handling;
 
 // Function definitions for data.cpp
 
+void new_random();
 std::string exec(const char* cmd);
+std::string construct_song_path(int id);
+std::string get_song_title(int id);
+std::string get_song_artist(int id);
 std::vector<std::string> get_all_playlists();
 std::vector<int> get_playlist(const std::string& name);
-std::string construct_song_path(int id);
 void done_playing(std::vector<int>& playlist, std::vector<int>& past);
 std::string char32_to_utf8(char32_t c32);
 bool matching(const std::string& s1, const std::string& s2, float diff, const char split = ' ');
 int get_start_song(std::vector<int>& playlist);
 std::string seconds_to_human_readable(float seconds);
 bool download_song_from_query(const std::string& query);
+std::vector<int> search_all_songs(const std::string& query);
 
 // Adapted from:
 // https://en.sfml-dev.org/forums/index.php?topic=24133.0
@@ -173,7 +186,14 @@ struct DTCache {
     auto idx = this->find(id);
 
     ids.erase(ids.begin() + idx);
+    names.erase(names.begin() + idx);
     items.erase(items.begin() + idx);
+  }
+
+  void clear() {
+    ids.clear();
+    names.clear();
+    items.clear();
   }
 
   void draw(int id, sf::RenderWindow& window) {
@@ -414,5 +434,15 @@ enum class AnimationStage {
   half,
   end,
 };
+
+struct ClickEvent {
+  std::function<void(MenuData&)> function;
+  sf::FloatRect bounds;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<ClickEvent> click_events;
+extern std::vector<ClickEvent> search_res_click_events;
+void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button);
 
 #endif

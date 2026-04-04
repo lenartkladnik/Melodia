@@ -1,8 +1,9 @@
-debug_build.sh
+alias_builds.sh
 .sconsign.dblite
 *.o
 build/
 bin/
-external/
+external/build/
+external/prog/
 todo/
 .music_data/

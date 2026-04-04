@@ -4,7 +4,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <string>
-#include "RoundedRectangleShape.hpp"
+#include "../../external/lib/RoundedRectangleShape.hpp"
 #include "data.hpp"
 
 std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos, sf::Font& default_font);

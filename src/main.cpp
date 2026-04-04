@@ -3,11 +3,11 @@
 #include <string>
 #include <algorithm>
 #include <math.h>
-#include "menus.hpp"
-#include "player_menu.hpp"
-#include "playlist_selector_menu.hpp"
-#include "data.hpp"
-#include "animation.hpp"
+#include "include/menus.hpp"
+#include "include/player_menu.hpp"
+#include "include/playlist_selector_menu.hpp"
+#include "include/data.hpp"
+#include "include/animation.hpp"
 
 using namespace sf;
 
@@ -59,14 +59,14 @@ int main(int argc, char *argv[]) {
     player->data->queue_expanded = false;
 
     animate_move_x(
-    player->data->queue_background,
-    queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x,
-      -speed
-    );
+      player->data->queue_background,
+      queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x,
+        -speed
+      );
     animate_move_x(
-    player->data->queue_background_shadow,
-    queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x + shadow_offset,
-      -speed
+      player->data->queue_background_shadow,
+      queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x + shadow_offset,
+        -speed
     );
   };
 
@@ -86,225 +86,158 @@ int main(int argc, char *argv[]) {
       if (event->is<sf::Event::Closed>())
         window.close();
 
-      switch (menu_data.type) {
-        case (MenuData::Player): {
-          if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
-            std::cerr << "Error: MenuData, should be of type Player" << std::endl;
-            return 1;
-          }
-
-          auto& player = std::get<MenuData::PlayerData>(menu_data.data);
-
-          if (search_active) {
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-              search_move_cursor_left();
+      if (!pause_main_input_handling) {
+        switch (menu_data.type) {
+          case (MenuData::Player): {
+            if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
+              std::cerr << "Error: MenuData, should be of type Player" << std::endl;
+              return 1;
             }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-              search_move_cursor_right();
-            }
-          } else {
-            // Keyboard controls (turned off when search_active)
 
-            if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
-              if (keyPressed->scancode == sf::Keyboard::Scancode::Space) {
-                player.music->toggle_play_state();
-              }
-            }
-          }
+            auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
-          if (const auto* text = event->getIf<Event::TextEntered>()) {
             if (search_active) {
-              auto input = text->unicode;
-
-              search_input(input);
-            }
-          }
-
-          if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
-            auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
-
-            if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-              if (player.data->main_control->getGlobalBounds().contains(pos)) { // Clicked on the play / pause button
-                player.music->toggle_play_state();
+              if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
+                search_move_cursor_left();
               }
-
-              else if (player.data->next_control->getGlobalBounds().contains(pos)) { // Next song
-                player.song_id = player.queue[0];
-                done_playing(player.queue, player.past_queue);
+              else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
+                search_move_cursor_right();
               }
+            } else {
+              // Keyboard controls (turned off when search_active)
 
-              else if (player.data->previous_control->getGlobalBounds().contains(pos)) { // Previous song
-                auto old_id = player.song_id;
-                if (player.past_queue.size() > 1) {
-                  auto idx = player.past_queue.size() - 2;
-
-                  player.song_id = player.past_queue[idx];
-                  player.past_queue.erase(player.past_queue.begin() + idx);
-
-                  player.queue.erase(std::find(player.queue.begin(), player.queue.end(), old_id));
-                  player.queue.insert(player.queue.begin(), old_id);
+              if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
+                if (keyPressed->scancode == sf::Keyboard::Scancode::Space) {
+                  player.music->toggle_play_state();
                 }
-              }
-
-              else if (player.data->trash->getGlobalBounds().contains(pos)) { // Delete song
-                std::cout << "TODO: Delete song" << std::endl;
-              }
-
-              else if (player.data->manage_playlist->getGlobalBounds().contains(pos)) { // Manage playlist
-                std::cout << "TODO: Manage playlist popup" << std::endl;
-              }
-
-              else if (player.data->favorite->getGlobalBounds().contains(pos)) { // Toggle favorite song
-                std::cout << "TODO: Toggle favorite song" << std::endl;
-                if (player.data->favorite_empty_tex->getNativeHandle() == player.data->favorite->getTexture().getNativeHandle()) {
-                  // Favorite
-                  player.data->favorite->setTexture(*player.data->favorite_full_tex);
-                }
-                else {
-                  // Un-favorite
-                  player.data->favorite->setTexture(*player.data->favorite_empty_tex);
-                }
-              }
-
-              else if (player.data->edit->getGlobalBounds().contains(pos)) { // Edit song
-                std::cout << "TODO: Edit song" << std::endl;
-              }
-
-              else if (player.data->progress.getGlobalBounds().contains(pos)) { // Clicked on the play progress bar -> start seeking
-                player.seeking = true;
-                player.music->silent_mute();
-                player.was_playing = player.music->is_playing();
-              }
-
-              else if (player.data->queue_toggle->getGlobalBounds().contains(pos)) { // Toggle the sidebar with the queue
-                player.data->queue_expanded = !player.data->queue_expanded;
-
-                if (player.data->queue_expanded) open_queue(&player, move_speed);
-                else close_queue(&player, move_speed);
-              }
-
-              else if (player.data->vol_icon->getGlobalBounds().contains(pos)) { // Clicked on the audio icon -> toggle mute
-                if (player.data->volume_tex->getNativeHandle() == player.data->vol_icon->getTexture().getNativeHandle()) {
-                  // Mute
-                  player.data->vol_icon->setTexture(*player.data->mute_tex);
-
-                  player.music->mute();
-                }
-                else {
-                  // Un-mute
-                  player.data->vol_icon->setTexture(*player.data->volume_tex);
-
-                  player.music->unmute();
-                }
-              }
-
-              else if (player.data->vol_slider.getGlobalBounds().contains(pos)) { // Clicked on the volume slider -> start change volume
-                player.volume_slider_active = true;
-              }
-
-              else if (player.data->live->getGlobalBounds().contains(pos)) { // Clicked on the live toggle
-                std::cout << "TODO: Toggle live mode" << std::endl;
-                if (player.data->live_full_tex->getNativeHandle() == player.data->live->getTexture().getNativeHandle()) {
-                  player.data->live->setTexture(*player.data->live_empty_tex);
-                  player.live_mode = false;
-                }
-                else {
-                  player.data->live->setTexture(*player.data->live_full_tex);
-                  player.live_mode = true;
-                }
-              }
-
-              else if (player.data->cancel_queue_search->getGlobalBounds().contains(pos) && !search_string.empty()) { // Clicked the cancel_queue_search button when the search was active -> clear search
-                search_string = "";
-                cursor_pos = 0;
-              }
-
-              else if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) { // Clicked on the playlist selector
-                switch_to_playlist_selector(menu_data, window, default_font);
-                break;
-              }
-
-              // ----------
-              // All inputs for the queue are handled in the menus.cpp file where the queue is generated on the fly
-              // ----------
-
-              // Actions that require focusing an element
-
-              if (player.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
-                search_focus(pos, *player.data->search_before_cursor, *player.data->search_after_cursor);
-              }
-              else { // Clicked anywhere else
-                search_unfocus(*player.data->search_before_cursor, *player.data->search_after_cursor);
               }
             }
-          }
 
-        break;
-        }
+            if (const auto* text = event->getIf<Event::TextEntered>()) {
+              if (search_active) {
+                auto input = text->unicode;
 
-        case (MenuData::PlaylistSelector): {
-          if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
-            std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
-            return 1;
-          }
-
-          auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
-
-          playlist_sel.reset_cursor = true;
-
-          if (search_active) {
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-              search_move_cursor_left();
+                search_input(input);
+              }
             }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-              search_move_cursor_right();
+
+            if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
+              auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
+
+              for (const auto& each : click_events) {
+                if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
+                  each.function(menu_data);
+                }
+              }
+
+              if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+                if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) {
+                  switch_to_playlist_selector(menu_data, window, default_font);
+                  break;
+                }
+
+
+                // ----------
+                // All inputs for the queue are handled in the player_menu.cpp file where the queue is generated on the fly
+                // ----------
+
+                // Actions that require focusing an element
+
+                if (player.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
+                  search_focus(pos, *player.data->search_before_cursor, *player.data->search_after_cursor);
+                }
+                else { // Clicked anywhere else
+                  search_unfocus(*player.data->search_before_cursor, *player.data->search_after_cursor);
+                }
+              }
             }
+
+          break;
           }
 
-          if (const auto* text = event->getIf<Event::TextEntered>()) {
+          case (MenuData::PlaylistSelector): {
+            if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
+              std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
+              return 1;
+            }
+
+            auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
+
+            playlist_sel.reset_cursor = true;
+
             if (search_active) {
-              auto input = text->unicode;
-
-              search_input(input);
-            }
-          }
-
-          if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
-            auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
-
-            if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-              // Actions that require focusing an element
-
-              if (playlist_sel.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
-                search_focus(pos, playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+              if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
+                search_move_cursor_left();
               }
-              else { // Clicked anywhere else
-                search_unfocus(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+              else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
+                search_move_cursor_right();
               }
             }
-          }
 
-          if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
-            auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
+            if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+              playlist_sel.data = init_playlist_selector(window, default_font); // Recalculate for the new size
+            }
 
-            if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-              if (playlist_sel.data->cancel_search.getGlobalBounds().contains(pos) && !search_string.empty()) { // Clicked the cancel_search button -> clear search
-                search_string = "";
-                cursor_pos = 0;
-              }
-              else if (playlist_sel.data->add_playlist.getGlobalBounds().contains(pos)) {
-                std::cout << "TODO: Clicked on add playlist button" << std::endl;
+            if (const auto* text = event->getIf<Event::TextEntered>()) {
+              if (search_active) {
+                auto input = text->unicode;
+
+                search_input(input);
               }
             }
-          }
 
-        break;
+            if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
+              auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
+
+              for (const auto& each : click_events) {
+                if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
+                  each.function(menu_data);
+                }
+              }
+
+              if (!search_string.empty()) {
+                for (const auto& each : search_res_click_events) {
+                  if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
+                    each.function(menu_data);
+                  }
+                }
+              }
+
+              if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+                if (playlist_sel.data->add_playlist.getGlobalBounds().contains(pos)) {
+                  std::cout << "TODO: Clicked on add playlist button" << std::endl;
+                }
+
+                // Actions that require focusing an element
+
+                if (playlist_sel.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
+                  search_focus(pos, playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+                }
+                else { // Clicked anywhere else
+                  search_unfocus(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+                }
+              }
+            }
+
+          break;
+          }
+          default:
+            std::cerr << "Error: Invalid menu selected." << std::endl;
+            switch_to_playlist_selector(menu_data, window, default_font);
+
+          break;
         }
-        default:
-          std::cerr << "Error: Invalid menu selected." << std::endl;
-          switch_to_playlist_selector(menu_data, window, default_font);
+      } // end while for event polling
+    } // end if !pause_main_input_handling
 
-        break;
+    // Progress bar
+    if (!progress_bar_string.empty()) {
+      std::cout << "Progress bar: " << progress_bar_string << " " << progress_bar_amount / progress_bar_total * 100 << "%" << std::endl;
+      if (progress_bar_amount == progress_bar_total) {
+        download_song_thread->join();
+        pause_main_input_handling = false;
+        prev_search_string = ""; // Reset the search (so the new downloaded song is shown)
+        progress_bar_string = ""; // Reset so that the .empty check above succeeds
       }
     }
 
@@ -367,7 +300,7 @@ int main(int argc, char *argv[]) {
           player.playing_song_id = player.song_id;
 
           player.music->play();
-          player.data = init_player(window, player.song_path, player.playlist, default_font);
+          player.data = init_player(window, player.song_path, player.song_id, player.playlist, default_font);
           player.data->cover.setTexture(player.data->cover_texture.get()); // Ensure the cover art texture is set
 
           // Reset state

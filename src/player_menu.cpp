@@ -4,11 +4,12 @@
 #include <fstream>
 #include <algorithm>
 #include <cmath>
-#include "RoundedRectangleShape.hpp"
-#include "data.hpp"
-#include "menus.hpp"
+#include "../external/lib/RoundedRectangleShape.hpp"
+#include "include/data.hpp"
+#include "include/menus.hpp"
+#include "include/animation.hpp"
 
-std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, const std::string& playlist, sf::Font& default_font) {
+std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist, sf::Font& default_font) {
   auto half = (float)(window_size.x / 2);
   auto third = (float)(window_size.x / 3);
 
@@ -34,20 +35,8 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   // Artist and title information (for bellow the cover art)
 
-  std::ifstream artist_file(song_path + ".artist");
-  std::string artist_string = "";
-  if (artist_file.good()) {
-    std::getline(artist_file, artist_string);
-  } else {
-    std::cerr << "Error: Failed to read artist name from '" << song_path << ".artist" << "'.";
-  }
-  std::ifstream title_file(song_path + ".title");
-  std::string title_string = "";
-  if (title_file.good()) {
-    std::getline(title_file, title_string);
-  } else {
-    std::cerr << "Error: Failed to read title from '" << song_path << ".title" << "'.";
-  }
+  std::string artist_string = get_song_artist(id);
+  std::string title_string = get_song_title(id);
 
   sf::Text artist(default_font, artist_string);
   artist.setCharacterSize(18);
@@ -259,6 +248,148 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     {50.f, queue_background.getPosition().y + 10.f},
     default_font
   );
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();
+  }, main_control.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    player.song_id = player.queue[0];
+    done_playing(player.queue, player.past_queue);
+  }, next_control.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    auto old_id = player.song_id;
+    if (player.past_queue.size() > 1) {
+      auto idx = player.past_queue.size() - 2;
+
+      player.song_id = player.past_queue[idx];
+      player.past_queue.erase(player.past_queue.begin() + idx);
+
+      player.queue.erase(std::find(player.queue.begin(), player.queue.end(), old_id));
+      player.queue.insert(player.queue.begin(), old_id);
+    }
+  }, previous_control.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    std::cout << "TODO: Delete song" << std::endl;
+  }, trash.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    std::cout << "TODO: Manage playlist popup" << std::endl;
+  }, manage_playlist.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    std::cout << "TODO: Toggle favorite song" << std::endl;
+    if (player.data->favorite_empty_tex->getNativeHandle() == player.data->favorite->getTexture().getNativeHandle()) {
+      // Favorite
+      player.data->favorite->setTexture(*player.data->favorite_full_tex);
+    }
+    else {
+      // Un-favorite
+      player.data->favorite->setTexture(*player.data->favorite_empty_tex);
+    }
+  }, favorite.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    std::cout << "TODO: Edit song" << std::endl;
+  }, edit.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    player.seeking = true;
+    player.music->silent_mute();
+    player.was_playing = player.music->is_playing();
+  }, progress.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    player.data->queue_expanded = !player.data->queue_expanded;
+
+    if (player.data->queue_expanded) {
+      player.data->queue_toggle->setTexture(*player.data->side_contract_tex);
+      player.data->queue_expanded = true;
+
+      animate_move_all_x(
+        {
+          &player.data->queue_background,
+          &player.data->queue_background_shadow
+        },
+        -10.f,
+        move_speed,
+        &player.data->queue_half_expanded,
+        true,
+        AnimationStage::half
+      );
+    }
+    else {
+      player.data->queue_toggle->setTexture(*player.data->side_expand_tex);
+      player.data->queue_half_expanded = false;
+      player.data->queue_expanded = false;
+
+      animate_move_x(
+        player.data->queue_background,
+        queue_contracted_width - player.data->queue_background.getGlobalBounds().size.x,
+          -move_speed
+      );
+      animate_move_x(
+        player.data->queue_background_shadow,
+        queue_contracted_width - player.data->queue_background.getGlobalBounds().size.x + shadow_offset,
+          -move_speed
+      );
+    }
+  }, queue_toggle.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    if (player.data->volume_tex->getNativeHandle() == player.data->vol_icon->getTexture().getNativeHandle()) {
+      // Mute
+      player.data->vol_icon->setTexture(*player.data->mute_tex);
+
+      player.music->mute();
+    }
+    else {
+      // Un-mute
+      player.data->vol_icon->setTexture(*player.data->volume_tex);
+
+      player.music->unmute();
+    }
+  }, vol_icon.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    player.volume_slider_active = true;
+  }, vol_slider.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+    std::cout << "TODO: Toggle live mode" << std::endl;
+    if (player.data->live_full_tex->getNativeHandle() == player.data->live->getTexture().getNativeHandle()) {
+      player.data->live->setTexture(*player.data->live_empty_tex);
+      player.live_mode = false;
+    }
+    else {
+      player.data->live->setTexture(*player.data->live_full_tex);
+      player.live_mode = true;
+    }
+  }, live.getGlobalBounds(), sf::Mouse::Button::Left);
 
 
   auto spdata = std::make_unique<StaticPlayerData>(StaticPlayerData {
@@ -713,9 +844,15 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
 }
 
 void switch_to_player(MenuData& menu_data, std::string playlist, sf::Font& default_font) {
+  new_random();
+
   menu_data.data = MenuData::PlayerData();
   menu_data.type = MenuData::Player;
+
   search_max_char = player_search_max_char;
+  search_results = {};
+  prev_search_string = "";
+  click_events = {};
 
   auto& pd = std::get<MenuData::PlayerData>(menu_data.data);
 
@@ -724,5 +861,5 @@ void switch_to_player(MenuData& menu_data, std::string playlist, sf::Font& defau
   pd.song_id = get_start_song(pd.queue);
   pd.is_valid = true;
 
-  pd.data = init_player(window, construct_song_path(pd.song_id), playlist, default_font);
+  pd.data = init_player(window, construct_song_path(pd.song_id), pd.song_id, playlist, default_font);
 }

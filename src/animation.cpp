@@ -3,7 +3,7 @@
 #include <time.h>
 #include <vector>
 #include <algorithm>
-#include "data.hpp"
+#include "include/data.hpp"
 
 struct AnimateThread {
   sf::Transformable* transformable_ptr;

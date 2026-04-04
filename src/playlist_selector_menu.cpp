@@ -3,17 +3,18 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
-#include "RoundedRectangleShape.hpp"
-#include "data.hpp"
-#include "menus.hpp"
-#include "player_menu.hpp"
+#include <thread>
+#include "../external/lib/RoundedRectangleShape.hpp"
+#include "include/data.hpp"
+#include "include/menus.hpp"
+#include "include/player_menu.hpp"
 
 std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window, sf::Font& default_font) {
   float search_size_x = 600.f;
   auto general = init_general(
     window,
     {search_size_x, 40.f},
-    {window.getSize().x / 2 - search_size_x / 2, 12.f},
+    {window_size.x / 2 - search_size_x / 2, 12.f},
     default_font
   );
 
@@ -77,15 +78,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
   window.clear(main_color);
 
-  window.draw(data.search_shadow);
-  window.draw(data.search_background);
-  window.draw(data.search_before_cursor);
-  window.draw(data.search_after_cursor);
-  window.draw(data.cancel_search);
-  if (show_cursor) {
-    search_draw_cursor(window, data.search_before_cursor, data.search_background);
-  }
-
   // Playlists
 
   float selector_gap = 20.f;
@@ -103,8 +95,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     data.playlist_play.setPosition(cover_pos);
     if (data.drawables_cache.contains(i)) { // Only draw existing ones
 
-      // Hover checks
-
       auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
       bool draw_playlist_play = false;
 
@@ -115,33 +105,36 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       data.drawables_cache.draw(i, window);
 
-      if (draw_playlist_play) {
-        window.draw(data.playlist_play);
+      if (!pause_main_input_handling) {
+        if (draw_playlist_play) {
+          window.draw(data.playlist_play);
+        }
+
+        // Hover checks
+
+        if (
+          (data.playlist_play.getGlobalBounds().contains(mouse_pos) && draw_playlist_play)
+        ) {
+          window.setMouseCursor(hand_cursor);
+
+          playlist_sel.reset_cursor = false;
+        }
+
+        // Click checks
+
+        if (!held_left_mb_down && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+          playlist_sel.playlist_play_pos = mouse_pos;
+
+        if (draw_playlist_play && playlist_sel.playlist_play_pos.x != -1 && data.playlist_play.getGlobalBounds().contains(playlist_sel.playlist_play_pos)) { // Clicked on the play / playlist art image
+          if (get_playlist(data.playlists[i]).size() > 0)
+            switch_to_player(menu_data, data.playlists[i], default_font);
+          return false;
+        }
+
+        held_left_mb_down = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+
+        continue;
       }
-
-      if (
-        (data.playlist_play.getGlobalBounds().contains(mouse_pos) && draw_playlist_play)
-      ) {
-        window.setMouseCursor(hand_cursor);
-
-        playlist_sel.reset_cursor = false;
-      }
-
-
-      // Click checks
-
-      if (!held_left_mb_down && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
-        playlist_sel.playlist_play_pos = mouse_pos;
-
-      if (draw_playlist_play && playlist_sel.playlist_play_pos.x != -1 && data.playlist_play.getGlobalBounds().contains(playlist_sel.playlist_play_pos)) { // Clicked on the play / playlist art image
-        if (get_playlist(data.playlists[i]).size() > 0)
-          switch_to_player(menu_data, data.playlists[i], default_font);
-        return false;
-      }
-
-      held_left_mb_down = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
-
-      continue;
     }
 
     auto cover = std::make_shared<sf::RoundedRectangleShape>(sf::Vector2f(selector_cover_size - cover_offset, selector_cover_size - cover_offset), 8, main_n);
@@ -186,6 +179,113 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture});
   }
 
+  if (!search_string.empty()) {
+    if (prev_search_string.empty() || prev_search_string != search_string) {
+      search_results = search_all_songs(search_string);
+      prev_search_string = search_string;
+      search_res_click_events = {};
+    }
+
+    auto entry_h = queue_cover_size + 10.f;
+
+    sf::RoundedRectangleShape search_results_background({data.search_background.getGlobalBounds().size.x, (entry_h + 10.f) * (search_results.size() + 1) - (search_results.empty() ? 5.f : 13.f)}, 8, main_n);
+    search_results_background.setPosition({data.search_background.getPosition().x, data.search_background.getPosition().y + data.search_background.getGlobalBounds().size.y - 20.f});
+    search_results_background.setFillColor(dark_background_color);
+
+    window.draw(search_results_background);
+
+    // Show search results
+
+    int idx = 0;
+    float last_y_pos = search_results_background.getPosition().y + 50.f;
+
+    for (const int& search_res_id : search_results) {
+      std::string search_res_path = base_music_path_data + std::to_string(search_res_id);
+
+      last_y_pos = search_results_background.getPosition().y + 20.f + (entry_h + 10.f) * idx + 10.f;
+
+      sf::Texture search_res_cover_texture(search_res_path + ".small.png");
+      sf::RoundedRectangleShape search_res_cover({queue_cover_size, queue_cover_size}, 8, main_n);
+      search_res_cover.setTexture(&search_res_cover_texture);
+      search_res_cover.setPosition({search_results_background.getPosition().x + 10.f, last_y_pos});
+
+      sf::RoundedRectangleShape search_res_cover_shadow({queue_cover_size, queue_cover_size}, 8, main_n);
+      search_res_cover_shadow.setFillColor(dark_background_shadow_color);
+      search_res_cover_shadow.setPosition({search_res_cover.getPosition().x + small_shadow_offset, search_res_cover.getPosition().y + small_shadow_offset});
+
+      sf::Text search_res_title(default_font, get_song_title(search_res_id));
+      search_res_title.setFillColor(title_color);
+      search_res_title.setCharacterSize(18);
+      search_res_title.setPosition({
+        search_res_cover.getPosition().x + search_res_cover.getGlobalBounds().size.x + 15.f,
+        search_res_cover.getPosition().y + queue_cover_size / 3 - 10.f
+      });
+
+      sf::Text search_res_artist(default_font, get_song_artist(search_res_id));
+      search_res_artist.setFillColor(artist_color);
+      search_res_artist.setCharacterSize(18);
+      search_res_artist.setPosition({search_res_title.getPosition().x, search_res_title.getPosition().y + 20.f});
+
+      sf::RoundedRectangleShape search_res_background({search_results_background.getGlobalBounds().size.x - 10.f, entry_h + 5.f}, 8, main_n);
+      search_res_background.setFillColor(background_shadow_color);
+      search_res_background.setPosition({search_res_cover.getPosition().x - 5.f, search_res_cover.getPosition().y - 5.f});
+
+      sf::Text search_res_more(default_font, "...");
+      search_res_more.setFillColor(text_color);
+      search_res_more.setCharacterSize(18);
+      search_res_more.setPosition({
+        search_res_background.getPosition().x + search_res_background.getGlobalBounds().size.x - search_res_more.getGlobalBounds().size.x - 20.f,
+        (search_res_background.getPosition().y - 5.f) + (search_res_background.getGlobalBounds().size.y - 5.f) / 2 - search_res_more.getGlobalBounds().size.y
+      });
+
+      window.draw(search_res_background);
+      window.draw(search_res_cover_shadow);
+      window.draw(search_res_cover);
+      window.draw(search_res_title);
+      window.draw(search_res_artist);
+      window.draw(search_res_more);
+
+      auto search_res_more_bounds = search_res_more.getGlobalBounds();
+      search_res_more_bounds.size.y = 40.f;
+      search_res_more_bounds.position.y -= 20.f;
+      new_click_event(search_res_click_events, [search_res_id](MenuData& menu_data) {
+        std::cout << "Edit " << search_res_id << std::endl;
+      }, search_res_more_bounds, sf::Mouse::Button::Left);
+
+      idx++;
+      last_y_pos += search_res_background.getGlobalBounds().size.y + 13.5;
+    }
+
+    // Download prompt
+
+    sf::Text download_prompt(default_font, "Download '" + search_string + "'");
+    download_prompt.setPosition({search_results_background.getPosition().x + 10.f, last_y_pos + 10.f});
+    download_prompt.setCharacterSize(18);
+    download_prompt.setFillColor(light_text_color);
+
+    sf::RoundedRectangleShape download_prompt_background({search_results_background.getGlobalBounds().size.x - 10.f, download_prompt.getGlobalBounds().size.y + 60.f}, 8, main_n);
+    download_prompt_background.setFillColor(background_shadow_color);
+    download_prompt_background.setPosition({download_prompt.getPosition().x - 5.f, download_prompt.getPosition().y - 30.f + download_prompt.getGlobalBounds().size.y / 2});
+
+    window.draw(download_prompt_background);
+    window.draw(download_prompt);
+
+    new_click_event(search_res_click_events, [](MenuData& menu_data) {
+      download_song_thread = std::unique_ptr<std::thread>(new std::thread(download_song_from_query, search_string));
+    }, download_prompt_background.getGlobalBounds(), sf::Mouse::Button::Left);
+  }
+  else {
+    window.draw(data.search_shadow);
+  }
+
+  window.draw(data.search_background);
+  window.draw(data.search_before_cursor);
+  window.draw(data.search_after_cursor);
+  window.draw(data.cancel_search);
+  if (show_cursor) {
+    search_draw_cursor(window, data.search_before_cursor, data.search_background);
+  }
+
   window.draw(data.control_corner_shadow);
   window.draw(data.control_corner);
   window.draw(data.add_playlist);
@@ -199,8 +299,10 @@ void switch_to_playlist_selector(MenuData& menu_data, sf::RenderWindow& window, 
   menu_data.data = MenuData::PlaylistSelectorData();
   menu_data.type = MenuData::PlaylistSelector;
 
-  // Change the maximum string length for search
   search_max_char = playlist_search_max_char;
+  search_results = {};
+  prev_search_string = "";
+  click_events = {};
 
   std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window, default_font);
   std::get<MenuData::PlaylistSelector>(menu_data.data).is_valid = true;

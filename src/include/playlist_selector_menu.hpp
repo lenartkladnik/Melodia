@@ -4,7 +4,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <string>
-#include "RoundedRectangleShape.hpp"
+#include "../../external/lib/RoundedRectangleShape.hpp"
 #include "data.hpp"
 
 std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window, sf::Font& default_font);

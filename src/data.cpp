@@ -13,10 +13,14 @@
 #include <stdexcept>
 #include <array>
 #include <sys/stat.h>
-#include "nlohmann/json.hpp"
+#include "../external/lib/nlohmann/json.hpp"
+#include "include/data.hpp"
+#include "../external/lib/httplib.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
+#ifndef _WIN32
+  #define STB_IMAGE_IMPLEMENTATION
+  #define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 
 #include "stb/stb_image.h"
@@ -24,11 +28,11 @@
 #include "stb/stb_image_write.h"
 
 #ifdef _WIN32
-    #define POPEN _popen
-    #define PCLOSE _pclose
+  #define POPEN _popen
+  #define PCLOSE _pclose
 #else
-    #define POPEN popen
-    #define PCLOSE pclose
+  #define POPEN popen
+  #define PCLOSE pclose
 #endif
 
 extern const float padding_top = 100.f;
@@ -50,6 +54,7 @@ extern const sf::Vector2f selector_size = {350.f, selector_cover_size};
 extern const std::string base_path = "./";
 extern const std::string base_path_misc = base_path + "misc/";
 extern const std::string base_path_external = base_path + "external/";
+extern const std::string base_path_external_prog = base_path_external + "prog/";
 extern const std::string base_music_path = ".music_data/";
 extern const std::string base_music_path_data = base_music_path + "data/";
 extern const std::string base_music_path_playlists = base_music_path + "playlists/";
@@ -57,7 +62,7 @@ extern const int queue_items = 6;
 extern const float move_speed = 20.f;
 extern const float match_diff = 3.f;
 extern const int player_search_max_char = 28;
-extern const int playlist_search_max_char = 46;
+extern const int playlist_search_max_char = 42;
 int search_max_char = 0;
 extern const int queue_max_char = 26;
 extern const float queue_contracted_width = 50.f;
@@ -92,14 +97,30 @@ size_t cursor_pos = 0;
 bool held_left_mb_down = false;
 bool reset_cursor = true;
 std::string search_string = "";
+std::string prev_search_string = "";
+std::vector<int> search_results = {};
+std::string progress_bar_string = "";
+float progress_bar_amount = 0.f;
+float progress_bar_total = 0.f;
+std::unique_ptr<std::thread> download_song_thread;
+bool pause_main_input_handling = false;
+
+std::vector<ClickEvent> click_events;
+std::vector<ClickEvent> search_res_click_events;
 
 std::random_device rd;
 std::mt19937 rand_generator(rd());
+
+void new_random() {
+  rand_generator.seed(rd());
+}
 
 // Source - https://stackoverflow.com/a/478960
 // Posted by waqas, modified by community. See post 'Timeline' for change history
 // Retrieved 2026-03-28, License - CC BY-SA 4.0
 std::string exec(const char* cmd) {
+  std::cout << "Info: Executing '" << cmd << "'." << std::endl;
+
   std::array<char, 128> buffer;
   std::string result;
   std::unique_ptr<FILE, decltype(&PCLOSE)> pipe(POPEN(cmd, "r"), PCLOSE);
@@ -110,6 +131,48 @@ std::string exec(const char* cmd) {
     result += buffer.data();
   }
   return result;
+}
+
+// ==============================================================================
+
+void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button) {
+  for (const auto& each : container) {
+    if (each.bounds == bounds) return;
+  }
+
+  container.push_back(ClickEvent{function, bounds, mouse_button});
+}
+
+std::string construct_song_path(int id) {
+  return base_music_path_data + std::to_string(id);
+}
+
+std::string get_song_title(int id) {
+  auto song_path = construct_song_path(id);
+
+  std::ifstream title_file(song_path + ".title");
+  std::string title_string = "";
+  if (title_file.good()) {
+    std::getline(title_file, title_string);
+  } else {
+    std::cerr << "Error: Failed to read title from '" << song_path << ".title" << "'.";
+  }
+
+  return title_string;
+}
+
+std::string get_song_artist(int id) {
+  auto song_path = construct_song_path(id);
+
+  std::ifstream artist_file(song_path + ".artist");
+  std::string artist_string = "";
+  if (artist_file.good()) {
+    std::getline(artist_file, artist_string);
+  } else {
+    std::cerr << "Error: Failed to read artist name from '" << song_path << ".artist" << "'.";
+  }
+
+  return artist_string;
 }
 
 std::vector<std::string> get_all_playlists() {
@@ -145,10 +208,6 @@ std::vector<int> get_playlist(const std::string& name) {
   std::shuffle(ids.begin(), ids.end(), rand_generator);
 
   return ids;
-}
-
-std::string construct_song_path(int id) {
-  return base_music_path_data + std::to_string(id);
 }
 
 void done_playing(std::vector<int>& playlist, std::vector<int>& past) {
@@ -235,7 +294,7 @@ bool isSubstring(const std::string& s1, const std::string& s2) {
   return s1.find(s2) != std::string::npos || s2.find(s1) != std::string::npos;
 }
 
-bool matching(const std::string& s1, const std::string& s2, float diff, const char split = ' ') {
+bool matching(const std::string& s1, const std::string& s2, float diff, const char split) {
     auto s1_clean = stripNonAlphaNum(s1);
     auto s2_clean = stripNonAlphaNum(s2);
 
@@ -299,8 +358,84 @@ std::string seconds_to_human_readable(float total_sec_left) {
   return std::to_string(minutes) + ":" + seconds;
 }
 
-bool _download_song_file_from_query(int new_id, const std::string& query) {
-  auto yt_dlp_path = base_path_external + "yt-dlp/";
+std::vector<int> search_all_songs(const std::string& query) {
+  std::vector<int> results;
+
+  struct stat s;
+  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_data)) {
+    auto path = entry.path();
+    auto str_path = path.string();
+
+    // First check that the path contains the .mp3 extensions, since it is one of the
+    // extensions every song has. Then check that the path is a file and not a directory.
+    if (path.filename().string().find(".mp3") != std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
+      int id = -1;
+      try {
+        id = std::stoi(path.stem().u8string());
+      } catch (const std::invalid_argument& e) {
+        std::cerr << e.what() << std::endl;
+      } catch (const std::out_of_range& e) {
+        std::cerr << e.what() << std::endl;
+      }
+
+      if (id >= 0) {
+        if (matching(query, get_song_title(id), match_diff)) {
+          results.push_back(id);
+          continue; // Don't bother matching the artist string
+        }
+
+        if (matching(query, get_song_artist(id), match_diff)) {
+          results.push_back(id);
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+// urlencode - Source:
+// https://gist.github.com/litefeel/1197e5c24eb9ec93d771
+
+void hexchar(unsigned char c, unsigned char &hex1, unsigned char &hex2) {
+  hex1 = c / 16;
+  hex2 = c % 16;
+  hex1 += hex1 <= 9 ? '0' : 'a' - 10;
+  hex2 += hex2 <= 9 ? '0' : 'a' - 10;
+}
+
+std::string urlencode(std::string s) {
+  const char *str = s.c_str();
+  std::vector<char> v(s.size());
+  v.clear();
+  for (size_t i = 0, l = s.size(); i < l; i++) {
+    char c = str[i];
+    if ((c >= '0' && c <= '9') ||
+      (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      c == '-' || c == '_' || c == '.' || c == '!' || c == '~' ||
+      c == '*' || c == '\'' || c == '(' || c == ')') {
+      v.push_back(c);
+    }
+    else if (c == ' ') {
+      v.push_back('+');
+    }
+    else {
+      v.push_back('%');
+      unsigned char d1, d2;
+      hexchar(c, d1, d2);
+      v.push_back(d1);
+      v.push_back(d2);
+    }
+  }
+
+  return std::string(v.cbegin(), v.cend());
+}
+
+// =====================================================
+
+bool _download_song_data_from_query(int new_id, const std::string& query) {
+  auto yt_dlp_path = base_path_external_prog + "yt-dlp/";
   auto new_base = base_music_path_data + std::to_string(new_id);
   auto yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
 
@@ -317,12 +452,10 @@ bool _download_song_file_from_query(int new_id, const std::string& query) {
   return false;
 }
 
-bool _download_and_resize_image(const std::string& url, const std::string& output, int target_w, int target_h) {
-  std::string temp_file = ".temp_cover.tmp";
-  std::string command = "curl -L -s -o " + temp_file + " \"" + url + "\"";
+bool _resize_cover_art(const std::string& temp_file, const std::string& output, int target_w, int target_h) {
+  progress_bar_amount += 1.f; // Done downloading / started resizing the cover art image
 
-  system(command.c_str());
-
+  std::cout << "Info: Resizing cover art image." << std::endl;
   int w, h, channels;
   unsigned char* data = stbi_load(temp_file.c_str(), &w, &h, &channels, 0);
 
@@ -354,88 +487,56 @@ bool _download_and_resize_image(const std::string& url, const std::string& outpu
     STBIR_FILTER_DEFAULT
   );
 
+  progress_bar_amount += 1.f; // Done resizing the cover art image
+
   if (!stbi_write_png(output.c_str(), target_w, target_h, channels, resized.data(), target_w * channels)) {
-    std::cerr << "Failed to write cover art image." << std::endl;
+    std::cerr << "Error: Failed to write cover art image." << std::endl;
     stbi_image_free(data);
     return false;
   }
 
   stbi_image_free(data);
+
+  std::cout << "Info: Resized cover art image" << std::endl;
+  progress_bar_amount += 1.f; // Done writing cover art image
+
+  return true;
+}
+
+bool _download_cover_art(int new_id) {
+  std::string new_base = base_music_path_data + std::to_string(new_id);
+  std::string temp_file = ".cover_art.png.tmp";
+
+  std::string artist_string = get_song_artist(new_id);
+  std::string title_string = get_song_title(new_id);
+
+  std::string query = "/search/tracks?q=" + urlencode(title_string + " " + artist_string);
+
+  httplib::Client cli("https://www.last.fm");
+  if (auto res = cli.Get(query)) {
+    std::cout << res->body << std::endl;
+  }
+
+  if (!_resize_cover_art(temp_file, new_base + ".png", 1000, 1000)) return false;
+  if (!_resize_cover_art(temp_file, new_base + ".small.png", 100, 100)) return false;
+
   std::remove(temp_file.c_str());
 
   return true;
 }
 
-bool _download_song_cover_from_id(int new_id) {
-  std::string new_base = base_music_path_data + std::to_string(new_id);
-
-  std::string title;
-  std::string artists;
-
-  std::ifstream title_file(new_base + ".title");
-  getline(title_file, title);
-
-  std::ifstream artist_file(new_base + ".artist");
-  getline(artist_file, artists);
-
-  if (title.empty() || artists.empty()) {
-    return false;
-  }
-
-  auto res = exec(("curl -L -s \"https://genius.com/api/search/multi?q=\"" + title + " by " + artists).c_str());
-
-  if (res.empty() || res == "") {
-    std::cerr << "Error: Failed to connect to 'https://genius.com'." << std::endl;
-    return false;
-  }
-
-  nlohmann::json data = nlohmann::json::parse(res);
-
-  std::string header_image_url;
-
-  try {
-    auto sections = data["response"]["sections"];
-
-    nlohmann::json top_hit_section;
-    for (const auto& section : sections) {
-      if (section["type"] == "top_hit") {
-        top_hit_section = section;
-        break;
-      }
-    }
-
-    auto hits = top_hit_section["hits"];
-
-    nlohmann::json song_hit;
-    for (const auto& hit : hits) {
-      if (hit["type"] == "song") {
-        song_hit = hit;
-        break;
-      }
-    }
-
-    auto result = song_hit["result"];
-
-    header_image_url = result["header_image_url"];
-
-  } catch (const nlohmann::json::exception& e) {
-    std::cerr << "Error: JSON parsing error: " << e.what() << std::endl;
-    return false;
-  }
-
-  if (header_image_url.empty()) {
-    std::cerr << "Error: Couldn't find cover image url in json." << std::endl;
-    return false;
-  }
-
-  _download_and_resize_image(header_image_url, new_base + ".png", 1000, 1000);
-  _download_and_resize_image(header_image_url, new_base + ".small.png", 100, 100);
-
-  return true;
-}
-
 bool download_song_from_query(const std::string& query) {
+  if (pause_main_input_handling) return false; // Exit if a download is ongoing
+
+  pause_main_input_handling = true;
+
   std::cout << "Info: Attempting to download song from query '" << query << "'." << std::endl;
+
+  // Set progress bar
+  progress_bar_string = "Downloading song...";
+  progress_bar_amount = 0.f;
+  progress_bar_total = 9.f; // 3 in download_song_from_query
+                            // 3 in _resize_cover_art (* 2)
 
   int max_id = -1;
 
@@ -452,11 +553,14 @@ bool download_song_from_query(const std::string& query) {
 
   auto new_id = max_id + 1;
 
-  if (!_download_song_file_from_query(new_id, query)) return false;
+  progress_bar_amount += 1.f; // Done with getting the max_id
+
+  if (!_download_song_data_from_query(new_id, query)) return false;
   std::cout << "Info: Downloaded song file and metadata for query '" << query << "'." << std::endl;
-  if (!_download_song_cover_from_id(new_id)) return false;
+  progress_bar_amount += 1.f; // Done with downloading song file from query
+  if (!_download_cover_art(new_id)) return false;
   std::cout << "Info: Downloaded song cover art for id '" << new_id << "'." << std::endl;
+  progress_bar_amount += 1.f; // Done with downloading song cover from query
 
   return true;
 }
-

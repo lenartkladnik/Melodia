@@ -5,49 +5,11 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include "RoundedRectangleShape.hpp"
-#include "data.hpp"
-#include "menus.hpp"
+#include "../external/lib/RoundedRectangleShape.hpp"
+#include "include/data.hpp"
+#include "include/menus.hpp"
 
 sf::Clock cursor_clock;
-
-std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos, sf::Font& default_font) {
-  // Search
-  sf::RoundedRectangleShape search_background(search_size, 20, main_n);
-  search_background.setPosition(search_pos);
-  search_background.setFillColor(dark_background_color);
-
-  sf::RoundedRectangleShape search_shadow({search_background.getGlobalBounds().size.x + 5.f, search_background.getGlobalBounds().size.y + 5.f}, 20, main_n);
-  search_shadow.setPosition({search_background.getPosition().x - 2.5f, search_background.getPosition().y + 3.f});
-  search_shadow.setFillColor(dark_main_color);
-
-  sf::Text search_before_cursor(default_font, "Search");
-  search_before_cursor.setPosition({search_background.getPosition().x + 10.f, search_background.getPosition().y + 6.f});
-  search_before_cursor.setCharacterSize(20);
-  search_before_cursor.setFillColor(light_text_color);
-
-  sf::Text search_after_cursor(default_font, "");
-  search_after_cursor.setCharacterSize(20);
-  search_after_cursor.setFillColor(text_color);
-
-  auto cancel_search_tex = std::make_shared<sf::Texture>();
-  if (!cancel_search_tex->loadFromFile(base_path_misc + "close.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "close.png'." << std::endl;
-  }
-  cancel_search_tex->setSmooth(true);
-
-  sf::Sprite cancel_search(*cancel_search_tex);
-  cancel_search.setPosition({search_background.getPosition().x + search_background.getGlobalBounds().size.x - cancel_search.getGlobalBounds().size.x - 14.f, search_background.getPosition().y + 9.f});
-
-  return std::make_unique<StaticData>(StaticData {
-    search_background,
-    search_shadow,
-    search_before_cursor,
-    search_after_cursor,
-    cancel_search_tex,
-    cancel_search
-  });
-}
 
 void search_reset_cursor() {
   cursor_clock.restart();
@@ -144,4 +106,50 @@ void search_draw_cursor(sf::RenderWindow& window, sf::Text& search_before_cursor
   cursor.setPosition({search_before_cursor.getPosition().x + 2.f + search_before_cursor.getGlobalBounds().size.x, search_before_cursor.getPosition().y + 1.f});
   cursor.setFillColor(white_color);
   window.draw(cursor);
+}
+
+std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos, sf::Font& default_font) {
+  search_string = "";
+  cursor_pos = 0;
+
+  // Search
+  sf::RoundedRectangleShape search_background(search_size, 20, main_n);
+  search_background.setPosition(search_pos);
+  search_background.setFillColor(dark_background_color);
+
+  sf::RoundedRectangleShape search_shadow({search_background.getGlobalBounds().size.x + 5.f, search_background.getGlobalBounds().size.y + 5.f}, 20, main_n);
+  search_shadow.setPosition({search_background.getPosition().x - 2.5f, search_background.getPosition().y + 3.f});
+  search_shadow.setFillColor(dark_main_color);
+
+  sf::Text search_before_cursor(default_font, "Search");
+  search_before_cursor.setPosition({search_background.getPosition().x + 10.f, search_background.getPosition().y + 6.f});
+  search_before_cursor.setCharacterSize(20);
+  search_before_cursor.setFillColor(light_text_color);
+
+  sf::Text search_after_cursor(default_font, "");
+  search_after_cursor.setCharacterSize(20);
+  search_after_cursor.setFillColor(text_color);
+
+  auto cancel_search_tex = std::make_shared<sf::Texture>();
+  if (!cancel_search_tex->loadFromFile(base_path_misc + "close.png")) {
+    std::cerr << "Error: Failed to load '" << base_path_misc << "close.png'." << std::endl;
+  }
+  cancel_search_tex->setSmooth(true);
+
+  sf::Sprite cancel_search(*cancel_search_tex);
+  cancel_search.setPosition({search_background.getPosition().x + search_background.getGlobalBounds().size.x - cancel_search.getGlobalBounds().size.x - 14.f, search_background.getPosition().y + 9.f});
+
+  new_click_event(click_events, [](MenuData& menu_data) {
+    search_string = "";
+    cursor_pos = 0;
+  }, cancel_search.getGlobalBounds(), sf::Mouse::Button::Left);
+
+  return std::make_unique<StaticData>(StaticData {
+    search_background,
+    search_shadow,
+    search_before_cursor,
+    search_after_cursor,
+    cancel_search_tex,
+    cancel_search
+  });
 }
