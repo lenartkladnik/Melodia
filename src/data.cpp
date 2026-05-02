@@ -59,7 +59,8 @@ extern const float scroll_speed = 25.f;
 
 extern const sf::Vector2u window_base_size({1920, 1080});
 sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed);
-sf::Vector2u window_size = window.getSize();
+sf::Vector2f window_size = {static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)};
+sf::View default_view = window.getDefaultView();
 
 extern const sf::Color main_color({179, 126, 25});
 extern const sf::Color dark_main_color({156, 110, 22});

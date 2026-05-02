@@ -83,8 +83,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   float selector_gap = 20.f;
   float cover_offset = 10.f;
   auto total_playlist_sel_size = (selector_cover_size + selector_size.x + selector_gap);
-  int max_playlists_per_line = (int)(window.getSize().x / total_playlist_sel_size);
-  float padding_to_center = (window_base_size.x - (total_playlist_sel_size * max_playlists_per_line)) / 2;
+  int max_playlists_per_line = (int)(window_size.x / total_playlist_sel_size);
+  float padding_to_center = (window_size.x - (total_playlist_sel_size * max_playlists_per_line)) / 2;
 
   for (size_t i = 0; i < data.playlists.size(); i++) {
     sf::Vector2f cover_pos = {
@@ -184,7 +184,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     auto approx_unit = entry_h + 10.f;
     auto approx_leftover = search_results.empty() ? 5.f : 13.f;
     auto approx_dl_prompt_h = (approx_unit - 60.f);
-    float search_results_background_h = std::min((approx_unit) * (search_results.size() + 1) - approx_leftover, (float)window.getSize().y - approx_unit - approx_dl_prompt_h);
+    float search_results_background_h = std::min((approx_unit) * (search_results.size() + 1) - approx_leftover, (float)window_size.y - approx_unit - approx_dl_prompt_h);
     sf::RoundedRectangleShape search_results_background({data.search_background.getGlobalBounds().size.x, search_results_background_h + approx_dl_prompt_h / 2}, 8, main_n);
     search_results_background.setPosition({data.search_background.getPosition().x, data.search_background.getPosition().y + data.search_background.getGlobalBounds().size.y - 20.f});
     search_results_background.setFillColor(dark_background_color);
@@ -273,8 +273,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       search_res_more_bounds.size.y = 30;
       search_res_more_bounds.position.y += 45.f - playlist_sel_scroll;
 
-      // std::cout << "search_res_more_bounds.position = " << search_res_more_bounds.position.x << ", " << search_res_more_bounds.position.y << std::endl;
-
       if (search_results_background.getGlobalBounds().contains(search_res_more_bounds.position)) {
         new_click_event(search_res_click_events, [search_res_id](MenuData& menu_data) {
           std::cout << "Edit " << search_res_id << std::endl;
@@ -339,8 +337,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     sf::RoundedRectangleShape pbar_background({550.f, 150.f}, 8, main_n);
     pbar_background.setFillColor(background_color);
     pbar_background.setPosition({
-      (window.getSize().x / 2) - (pbar_background.getGlobalBounds().size.x / 2),
-      (window.getSize().y / 2) - (pbar_background.getGlobalBounds().size.y / 2)
+      (window_size.x / 2) - (pbar_background.getGlobalBounds().size.x / 2),
+      (window_size.y / 2) - (pbar_background.getGlobalBounds().size.y / 2)
     });
 
     sf::Text pbar_text(default_font, progress_bar_string);

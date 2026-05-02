@@ -47,7 +47,8 @@ extern const float scroll_speed;
 extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings settings;
 extern sf::RenderWindow window;
-extern sf::Vector2u window_size;
+extern sf::Vector2f window_size;
+extern sf::View default_view;
 
 extern const sf::Color main_color;
 extern const sf::Color dark_main_color;

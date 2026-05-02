@@ -11,6 +11,8 @@
 - ~play playlist button is unreliable~
 - ~sometimes the wrong song plays when selecting a playlist~
 - ~fix random crash related to copying StaticPlayerData~
+- when switching songs the song that was playing gets put into the same position as the newly selected song
+- player UI breaks when resized
 
 # hover over song in queue
 - ~change duration to ...~

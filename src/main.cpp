@@ -81,9 +81,20 @@ int main(int argc, char *argv[]) {
       if (event->is<sf::Event::Closed>())
         window.close();
 
-      if (event->is<sf::Event::Resized>()) {
+      if (const auto* resized = event->getIf<sf::Event::Resized>()) {
         // On resize:
+        // - set new view
         // - unfocus search
+        // - re-init
+
+        // Ensure smooth resizing (https://en.sfml-dev.org/forums/index.php?topic=17747.0)
+        window_size = {
+          static_cast<float>(resized->size.x),
+          static_cast<float>(resized->size.y)
+        };
+        default_view.setSize(window_size);
+        default_view.setCenter({window_size.x / 2.f, window_size.y / 2.f});
+        window.setView(default_view);
 
         switch (menu_data.type) {
           case (MenuData::Player): {
@@ -108,6 +119,9 @@ int main(int argc, char *argv[]) {
             auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
             search_unfocus(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+
+            // After the resize all items must be re-rendered
+            switch_to_playlist_selector(menu_data, window);
 
             break;
           }
@@ -217,10 +231,6 @@ int main(int argc, char *argv[]) {
               else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
                 search_move_cursor_right();
               }
-            }
-
-            if (const auto* resized = event->getIf<sf::Event::Resized>()) {
-              playlist_sel.data = init_playlist_selector(window); // Recalculate for the new size
             }
 
             if (const auto* text = event->getIf<Event::TextEntered>()) {
