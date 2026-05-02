@@ -9,7 +9,7 @@
 #include "include/menus.hpp"
 #include "include/animation.hpp"
 
-std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist, sf::Font& default_font) {
+std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist) {
   auto half = (float)(window_size.x / 2);
   auto third = (float)(window_size.x / 3);
 
@@ -37,6 +37,14 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   std::string artist_string = get_song_artist(id);
   std::string title_string = get_song_title(id);
+
+  if (artist_string.size() > 53) {
+    artist_string = artist_string.substr(0, 50) + "...";
+  }
+
+  if (title_string.size() > 45) {
+    title_string = title_string.substr(0, 42) + "...";
+  }
 
   sf::Text artist(default_font, artist_string);
   artist.setCharacterSize(18);
@@ -245,8 +253,7 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   auto general = init_general(
     window,
     {queue_background.getGlobalBounds().size.x - 100.f, 40.f},
-    {50.f, queue_background.getPosition().y + 10.f},
-    default_font
+    {50.f, queue_background.getPosition().y + 10.f}
   );
 
   new_click_event(click_events, [](MenuData& menu_data) {
@@ -254,6 +261,8 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   }, main_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
   new_click_event(click_events, [](MenuData& menu_data) {
+    std::cout << "clicked" << std::endl;
+
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.song_id = player.queue[0];
@@ -391,7 +400,7 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, live.getGlobalBounds(), sf::Mouse::Button::Left);
 
-
+ 
   auto spdata = std::make_unique<StaticPlayerData>(StaticPlayerData {
     main_control,
     next_control,
@@ -451,11 +460,13 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   return spdata;
 }
 
-void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::Font& default_font) {
+void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
   auto& player_data = *player.data;
   auto& music = player.music;
 
   auto main_control = player_data.main_control; // Create a mutable copy of the main_control sprite
+
+  player.reset_cursor = true; // Default state
 
   auto playback_pos = music->get_playback_pos();
   if (playback_pos < slider_threshold) playback_pos = 0.015;
@@ -561,7 +572,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
 
     sf::Sprite queue_play(queue_play_tex);
 
-    auto get_queue_entry_position = [player_data](int index) {
+    auto get_queue_entry_position = [&player_data](int index) {
       return player_data.search_background.getPosition().y + player_data.search_background.getGlobalBounds().size.y + 20.f + (queue_cover_size + 20.f) * index;
     };
 
@@ -609,9 +620,11 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
     bool not_found = true;
     int idx = 0;
     for (const int id : draw_ready_queue) {
+      if ((idx >= queue_items) && id != player.dragging_queue) // Display a limited amount of queue, but always display the item being dragged (TODO: scrool)
+        continue;
+
       if (id == -1) { // -1 means blank space
         idx += 1;
-        if (idx >= queue_items) break;
         continue;
       }
 
@@ -645,7 +658,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
         10.f,
         player.dragging_queue == id ?
           window.mapPixelToCoords(sf::Mouse::getPosition(window)).y - queue_entry_background.getGlobalBounds().size.y / 2:
-          get_queue_entry_position(idx) // +1 makes space for the current playing song
+          get_queue_entry_position(idx)
       });
 
       std::ifstream artist_file(queue_song_path + ".artist");
@@ -787,11 +800,12 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
           }
 
           player.dragging_queue = -1;
+
+          continue; // Skip the frame when the dragging queue is reset (fixes flickering on move)
         }
       }
 
       held_left_mb_down = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
-
 
       window.draw(queue_entry_shadow);
       window.draw(queue_entry_background);
@@ -809,7 +823,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
 
       not_found = false;
       idx++;
-      if (idx >= queue_items) break; // Display a limited amount of queue (TODO: scrool)
     }
 
     if (not_found) { // Nothing was shown
@@ -833,7 +846,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
   else {
     // Queue contracted
 
-    player_data.playlist_data->setString(std::to_string(player.playlist.size() + 1));
+    player_data.playlist_data->setString(std::to_string(player.queue.size()));
 
     window.draw(*player_data.playlist_selector);
   }
@@ -843,7 +856,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window, sf::
   window.display();
 }
 
-void switch_to_player(MenuData& menu_data, std::string playlist, sf::Font& default_font) {
+void switch_to_player(MenuData& menu_data, std::string playlist) {
   new_random();
 
   menu_data.data = MenuData::PlayerData();
@@ -861,5 +874,5 @@ void switch_to_player(MenuData& menu_data, std::string playlist, sf::Font& defau
   pd.song_id = get_start_song(pd.queue);
   pd.is_valid = true;
 
-  pd.data = init_player(window, construct_song_path(pd.song_id), pd.song_id, playlist, default_font);
+  pd.data = init_player(window, construct_song_path(pd.song_id), pd.song_id, playlist);
 }

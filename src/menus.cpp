@@ -65,6 +65,7 @@ void search_input(char32_t input) {
 }
 
 void search_focus(sf::Vector2f& pos, sf::Text& search_before_cursor, sf::Text& search_after_cursor) {
+  search_before_cursor.setFillColor(text_color);
   if (search_active) { // Set cursor pos
     if (search_string.empty()) {
       cursor_pos = 0;
@@ -85,7 +86,6 @@ void search_focus(sf::Vector2f& pos, sf::Text& search_before_cursor, sf::Text& s
   }
   else {
     search_active = true;
-    search_before_cursor.setFillColor(text_color);
     search_before_cursor.setString(search_string.substr(0, cursor_pos));
     search_after_cursor.setString(search_string.substr(cursor_pos));
   }
@@ -96,6 +96,7 @@ void search_unfocus(sf::Text& search_before_cursor, sf::Text& search_after_curso
   show_cursor = false;
 
   if (search_string.size() == 0) {
+    search_after_cursor.setFillColor(text_color);
     search_before_cursor.setFillColor(light_text_color);
     search_before_cursor.setString("Search");
   }
@@ -108,7 +109,7 @@ void search_draw_cursor(sf::RenderWindow& window, sf::Text& search_before_cursor
   window.draw(cursor);
 }
 
-std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos, sf::Font& default_font) {
+std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos) {
   search_string = "";
   cursor_pos = 0;
 

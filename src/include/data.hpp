@@ -42,11 +42,12 @@ extern int search_max_char;
 extern const int queue_max_char;
 extern const float queue_contracted_width;
 extern const float control_corner_gap;
+extern const float scroll_speed;
 
 extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings settings;
 extern sf::RenderWindow window;
-extern const sf::Vector2u window_size;
+extern sf::Vector2u window_size;
 
 extern const sf::Color main_color;
 extern const sf::Color dark_main_color;
@@ -67,6 +68,8 @@ extern const sf::Cursor default_cursor;
 extern const sf::Cursor text_cursor;
 extern const sf::Cursor hand_cursor;
 
+extern sf::Font default_font;
+
 extern bool search_active;
 extern bool show_cursor;
 extern size_t cursor_pos;
@@ -76,10 +79,13 @@ extern std::string search_string;
 extern std::string prev_search_string;
 extern std::vector<int> search_results;
 extern std::string progress_bar_string;
+extern std::string progress_bar_doing_string;
 extern float progress_bar_amount;
 extern float progress_bar_total;
 extern std::unique_ptr<std::thread> download_song_thread;
 extern bool pause_main_input_handling;
+extern float playlist_sel_scroll;
+extern bool can_search_string_scroll;
 
 // Function definitions for data.cpp
 
@@ -95,7 +101,6 @@ std::string char32_to_utf8(char32_t c32);
 bool matching(const std::string& s1, const std::string& s2, float diff, const char split = ' ');
 int get_start_song(std::vector<int>& playlist);
 std::string seconds_to_human_readable(float seconds);
-bool download_song_from_query(const std::string& query);
 std::vector<int> search_all_songs(const std::string& query);
 
 // Adapted from:
@@ -315,6 +320,17 @@ struct StaticData {
   sf::Text search_after_cursor;
   std::shared_ptr<sf::Texture> cancel_search_tex;
   sf::Sprite cancel_search;
+
+  StaticData() = default;
+  ~StaticData() = default;
+
+  // Disallow copy
+  StaticData(const StaticData&) = delete;
+  StaticData& operator=(const StaticData&) = delete;
+
+  // Allow move
+  StaticData(StaticData&&) = default;
+  StaticData& operator=(StaticData&&) = default;
 };
 
 struct StaticPlayerData {
@@ -371,6 +387,17 @@ struct StaticPlayerData {
   std::shared_ptr<sf::Texture> live_full_tex;
   std::shared_ptr<sf::Texture> live_empty_tex;
   std::shared_ptr<sf::Texture> cancel_queue_search_tex;
+
+  StaticPlayerData() = default;
+  ~StaticPlayerData() = default;
+
+  // Disallow copy
+  StaticPlayerData(const StaticPlayerData&) = delete;
+  StaticPlayerData& operator=(const StaticPlayerData&) = delete;
+
+  // Allow move
+  StaticPlayerData(StaticPlayerData&&) = default;
+  StaticPlayerData& operator=(StaticPlayerData&&) = default;
 };
 
 struct StaticPlaylistSelectorData {
@@ -388,6 +415,17 @@ struct StaticPlaylistSelectorData {
   sf::Sprite playlist_play;
   std::vector<std::string> playlists;
   DTCache drawables_cache;
+
+  StaticPlaylistSelectorData() = default;
+  ~StaticPlaylistSelectorData() = default;
+
+  // Disallow copy
+  StaticPlaylistSelectorData(const StaticPlaylistSelectorData&) = delete;
+  StaticPlaylistSelectorData& operator=(const StaticPlaylistSelectorData&) = delete;
+
+  // Allow move
+  StaticPlaylistSelectorData(StaticPlaylistSelectorData&&) = default;
+  StaticPlaylistSelectorData& operator=(StaticPlaylistSelectorData&&) = default;
 };
 
 struct MenuData {
@@ -439,10 +477,20 @@ struct ClickEvent {
   std::function<void(MenuData&)> function;
   sf::FloatRect bounds;
   sf::Mouse::Button mouse_button;
+  sf::View view;
 };
 
 extern std::vector<ClickEvent> click_events;
 extern std::vector<ClickEvent> search_res_click_events;
-void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button);
+void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, sf::View view = window.getDefaultView());
+
+struct ScrollEvent {
+  float& scroll_offset;
+  sf::FloatRect bounds;
+  bool& can_scroll;
+};
+
+extern std::vector<ScrollEvent> scroll_events;
+void new_scroll_event(std::vector<ScrollEvent>& container, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll);
 
 #endif

@@ -17,6 +17,7 @@ sources = [
     "src/player_menu.cpp",
     "src/playlist_selector_menu.cpp",
     "src/animation.cpp",
+    "src/download.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]
 

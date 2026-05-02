@@ -20,7 +20,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  sf::Font default_font;
   if (!default_font.openFromFile(base_path_misc + "JetBrainsMono-Regular.ttf")) {
     std::cerr << "Error: Failed to load font 'JetBrainsMono-Regular.tff'." << std::endl;
     return 1;
@@ -28,13 +27,9 @@ int main(int argc, char *argv[]) {
 
   window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
-  // if (!download_song_from_query("Clint Eastwood")) {
-  //   std::cout << "Failed to download song" << std::endl;
-  // }
-
   MenuData menu_data;
 
-  switch_to_playlist_selector(menu_data, window, default_font); // Start as the playlist selector
+  switch_to_playlist_selector(menu_data, window); // Start as the playlist selector
 
   auto open_queue = [](auto* player, auto speed){
     player->data->queue_toggle->setTexture(*player->data->side_contract_tex);
@@ -86,7 +81,63 @@ int main(int argc, char *argv[]) {
       if (event->is<sf::Event::Closed>())
         window.close();
 
+      if (event->is<sf::Event::Resized>()) {
+        // On resize:
+        // - unfocus search
+
+        switch (menu_data.type) {
+          case (MenuData::Player): {
+            if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
+              std::cerr << "Error: MenuData, should be of type Player" << std::endl;
+              return 1;
+            }
+
+            auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+
+            search_unfocus(*player.data->search_before_cursor, *player.data->search_after_cursor);
+
+            break;
+          }
+
+          case (MenuData::PlaylistSelector): {
+            if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
+              std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
+              return 1;
+            }
+
+            auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
+
+            search_unfocus(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+
+            break;
+          }
+        }
+      }
+
       if (!pause_main_input_handling) {
+        const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
+        if (mouseWheelScrolled) {
+          auto pos = window.mapPixelToCoords(mouseWheelScrolled->position);
+
+          for (const auto& each : scroll_events) {
+            if (each.can_scroll && each.bounds.contains(pos)) {
+              each.scroll_offset -= mouseWheelScrolled->delta * scroll_speed; // Invert
+            }
+          }
+        }
+
+        const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>();
+        if (mouseButtonPressed) {
+          for (const auto& each : click_events) {
+            auto pos = window.mapPixelToCoords(mouseButtonPressed->position, each.view);
+
+            if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
+              each.function(menu_data);
+            }
+          }
+        }
+
+        // Menu specific events
         switch (menu_data.type) {
           case (MenuData::Player): {
             if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
@@ -121,18 +172,12 @@ int main(int argc, char *argv[]) {
               }
             }
 
-            if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
+            if (mouseButtonPressed) {
               auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
-
-              for (const auto& each : click_events) {
-                if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
-                  each.function(menu_data);
-                }
-              }
 
               if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
                 if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) {
-                  switch_to_playlist_selector(menu_data, window, default_font);
+                  switch_to_playlist_selector(menu_data, window);
                   break;
                 }
 
@@ -175,7 +220,7 @@ int main(int argc, char *argv[]) {
             }
 
             if (const auto* resized = event->getIf<sf::Event::Resized>()) {
-              playlist_sel.data = init_playlist_selector(window, default_font); // Recalculate for the new size
+              playlist_sel.data = init_playlist_selector(window); // Recalculate for the new size
             }
 
             if (const auto* text = event->getIf<Event::TextEntered>()) {
@@ -186,14 +231,13 @@ int main(int argc, char *argv[]) {
               }
             }
 
-            if (const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>()) {
-              auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
+            if (mouseWheelScrolled) {
+              if (!search_string.empty())
+                search_res_click_events.clear();
+            }
 
-              for (const auto& each : click_events) {
-                if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
-                  each.function(menu_data);
-                }
-              }
+            if (mouseButtonPressed) {
+              auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
 
               if (!search_string.empty()) {
                 for (const auto& each : search_res_click_events) {
@@ -204,11 +248,9 @@ int main(int argc, char *argv[]) {
               }
 
               if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-                if (playlist_sel.data->add_playlist.getGlobalBounds().contains(pos)) {
-                  std::cout << "TODO: Clicked on add playlist button" << std::endl;
-                }
-
-                // Actions that require focusing an element
+                // Unfocusing requires detection of clicks on the whole
+                // screen so I have not gotten around to implementing it in
+                // a click event
 
                 if (playlist_sel.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
                   search_focus(pos, playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
@@ -223,16 +265,15 @@ int main(int argc, char *argv[]) {
           }
           default:
             std::cerr << "Error: Invalid menu selected." << std::endl;
-            switch_to_playlist_selector(menu_data, window, default_font);
+            switch_to_playlist_selector(menu_data, window);
 
           break;
         }
-      } // end while for event polling
-    } // end if !pause_main_input_handling
+      }
+    } // end while for event handling
 
     // Progress bar
     if (!progress_bar_string.empty()) {
-      std::cout << "Progress bar: " << progress_bar_string << " " << progress_bar_amount / progress_bar_total * 100 << "%" << std::endl;
       if (progress_bar_amount == progress_bar_total) {
         download_song_thread->join();
         pause_main_input_handling = false;
@@ -300,7 +341,7 @@ int main(int argc, char *argv[]) {
           player.playing_song_id = player.song_id;
 
           player.music->play();
-          player.data = init_player(window, player.song_path, player.song_id, player.playlist, default_font);
+          player.data = init_player(window, player.song_path, player.song_id, player.playlist);
           player.data->cover.setTexture(player.data->cover_texture.get()); // Ensure the cover art texture is set
 
           // Reset state
@@ -343,7 +384,7 @@ int main(int argc, char *argv[]) {
           player.reset_cursor = true;
         }
 
-        if (player.data) display_player(player, window, default_font);
+        if (player.data) display_player(player, window);
         else player.playing_song_id = -1; // Something went wrong re-init
 
       break;
@@ -379,7 +420,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (playlist_sel.data) {
-          if (!display_playlist_selector(playlist_sel, window, menu_data, default_font)) break; // false returned when switched to new menu
+          if (!display_playlist_selector(playlist_sel, window, menu_data)) break; // false returned when switched to new menu
         }
 
       break;

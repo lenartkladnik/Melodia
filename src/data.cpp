@@ -13,19 +13,7 @@
 #include <stdexcept>
 #include <array>
 #include <sys/stat.h>
-#include "../external/lib/nlohmann/json.hpp"
 #include "include/data.hpp"
-#include "../external/lib/httplib.h"
-
-#ifndef _WIN32
-  #define STB_IMAGE_IMPLEMENTATION
-  #define STB_IMAGE_WRITE_IMPLEMENTATION
-#endif
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-
-#include "stb/stb_image.h"
-#include "stb/stb_image_resize2.h"
-#include "stb/stb_image_write.h"
 
 #ifdef _WIN32
   #define POPEN _popen
@@ -67,10 +55,11 @@ int search_max_char = 0;
 extern const int queue_max_char = 26;
 extern const float queue_contracted_width = 50.f;
 extern const float control_corner_gap = 15.f;
+extern const float scroll_speed = 25.f;
 
 extern const sf::Vector2u window_base_size({1920, 1080});
 sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed);
-extern const sf::Vector2u window_size = window.getSize();
+sf::Vector2u window_size = window.getSize();
 
 extern const sf::Color main_color({179, 126, 25});
 extern const sf::Color dark_main_color({156, 110, 22});
@@ -91,6 +80,8 @@ extern const sf::Cursor default_cursor = sf::Cursor::createFromSystem(sf::Cursor
 extern const sf::Cursor text_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Text).value();
 extern const sf::Cursor hand_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Hand).value();
 
+sf::Font default_font;
+
 bool search_active = false;
 bool show_cursor = false;
 size_t cursor_pos = 0;
@@ -100,13 +91,18 @@ std::string search_string = "";
 std::string prev_search_string = "";
 std::vector<int> search_results = {};
 std::string progress_bar_string = "";
+std::string progress_bar_doing_string = "";
 float progress_bar_amount = 0.f;
 float progress_bar_total = 0.f;
 std::unique_ptr<std::thread> download_song_thread;
 bool pause_main_input_handling = false;
+float playlist_sel_scroll = 0.f;
+bool can_search_string_scroll = false;
 
 std::vector<ClickEvent> click_events;
 std::vector<ClickEvent> search_res_click_events;
+
+std::vector<ScrollEvent> scroll_events;
 
 std::random_device rd;
 std::mt19937 rand_generator(rd());
@@ -135,12 +131,20 @@ std::string exec(const char* cmd) {
 
 // ==============================================================================
 
-void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button) {
+void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, sf::View view) {
   for (const auto& each : container) {
     if (each.bounds == bounds) return;
   }
 
-  container.push_back(ClickEvent{function, bounds, mouse_button});
+  container.push_back(ClickEvent{function, bounds, mouse_button, view});
+}
+
+void new_scroll_event(std::vector<ScrollEvent>& container, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll) {
+  for (const auto& each : container) {
+    if (each.bounds == bounds) return;
+  }
+
+  container.push_back(ScrollEvent{scroll_offset, bounds, can_scroll});
 }
 
 std::string construct_song_path(int id) {
@@ -229,31 +233,10 @@ void done_playing(std::vector<int>& playlist, std::vector<int>& past) {
 }
 
 int get_start_song(std::vector<int>& playlist) {
-  int forbidden = playlist[0]; // the starting song can't be the first song in the queue
-
-  if (playlist.size() == 1) {
-    return playlist[0]; // ignore the forbidden id
-  }
-
   std::uniform_int_distribution<> distr(0, playlist.size() - 1);
 
-  int id = distr(rand_generator);
-  int i = 0;
-  while (id == forbidden) {
-    id = distr(rand_generator);
-    i++;
-    if (i > 10) break;
-  }
-
-  if (i > 10) {
-    // Should (almost) never happen. Produce a non random first song
-    if (forbidden == 0) {
-      id = 1;
-    }
-    else {
-      id = forbidden - 1;
-    }
-  }
+  int id_idx = distr(rand_generator);
+  int id = playlist[id_idx];
 
   return id;
 }
@@ -392,175 +375,4 @@ std::vector<int> search_all_songs(const std::string& query) {
   }
 
   return results;
-}
-
-// urlencode - Source:
-// https://gist.github.com/litefeel/1197e5c24eb9ec93d771
-
-void hexchar(unsigned char c, unsigned char &hex1, unsigned char &hex2) {
-  hex1 = c / 16;
-  hex2 = c % 16;
-  hex1 += hex1 <= 9 ? '0' : 'a' - 10;
-  hex2 += hex2 <= 9 ? '0' : 'a' - 10;
-}
-
-std::string urlencode(std::string s) {
-  const char *str = s.c_str();
-  std::vector<char> v(s.size());
-  v.clear();
-  for (size_t i = 0, l = s.size(); i < l; i++) {
-    char c = str[i];
-    if ((c >= '0' && c <= '9') ||
-      (c >= 'a' && c <= 'z') ||
-      (c >= 'A' && c <= 'Z') ||
-      c == '-' || c == '_' || c == '.' || c == '!' || c == '~' ||
-      c == '*' || c == '\'' || c == '(' || c == ')') {
-      v.push_back(c);
-    }
-    else if (c == ' ') {
-      v.push_back('+');
-    }
-    else {
-      v.push_back('%');
-      unsigned char d1, d2;
-      hexchar(c, d1, d2);
-      v.push_back(d1);
-      v.push_back(d2);
-    }
-  }
-
-  return std::string(v.cbegin(), v.cend());
-}
-
-// =====================================================
-
-bool _download_song_data_from_query(int new_id, const std::string& query) {
-  auto yt_dlp_path = base_path_external_prog + "yt-dlp/";
-  auto new_base = base_music_path_data + std::to_string(new_id);
-  auto yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
-
-  #ifdef __linux__
-  return system((yt_dlp_path + "yt-dlp_linux" + yt_dlp_args).c_str()) == 0;
-  #endif
-  #ifdef __MINGW32__
-  return system((yt_dlp_path + "yt-dlp.exe" + yt_dlp_args).c_str()) == 0;
-  #endif
-  #ifdef __APPLE__
-  return system((yt_dlp_path + "yt-dlp_macos" + yt_dlp_args).c_str()) == 0;
-  #endif
-
-  return false;
-}
-
-bool _resize_cover_art(const std::string& temp_file, const std::string& output, int target_w, int target_h) {
-  progress_bar_amount += 1.f; // Done downloading / started resizing the cover art image
-
-  std::cout << "Info: Resizing cover art image." << std::endl;
-  int w, h, channels;
-  unsigned char* data = stbi_load(temp_file.c_str(), &w, &h, &channels, 0);
-
-  if (!data) {
-    std::cerr << "Error: Failed to decode image from " << temp_file << std::endl;
-    return false;
-  }
-
-  std::vector<unsigned char> resized(target_w * target_h * channels);
-
-  stbir_pixel_layout layout;
-  switch (channels) {
-    case 1: layout = STBIR_1CHANNEL; break;
-    case 2: layout = STBIR_2CHANNEL; break;
-    case 3: layout = STBIR_RGB; break;
-    case 4: layout = STBIR_RGBA; break;
-    default:
-      std::cerr << "Error: Unsupported channel count for cover art image." << std::endl;
-      stbi_image_free(data);
-      return false;
-  }
-
-  stbir_resize(
-    data, w, h, 0,
-    resized.data(), target_w, target_h, 0,
-    layout,
-    STBIR_TYPE_UINT8,
-    STBIR_EDGE_CLAMP,
-    STBIR_FILTER_DEFAULT
-  );
-
-  progress_bar_amount += 1.f; // Done resizing the cover art image
-
-  if (!stbi_write_png(output.c_str(), target_w, target_h, channels, resized.data(), target_w * channels)) {
-    std::cerr << "Error: Failed to write cover art image." << std::endl;
-    stbi_image_free(data);
-    return false;
-  }
-
-  stbi_image_free(data);
-
-  std::cout << "Info: Resized cover art image" << std::endl;
-  progress_bar_amount += 1.f; // Done writing cover art image
-
-  return true;
-}
-
-bool _download_cover_art(int new_id) {
-  std::string new_base = base_music_path_data + std::to_string(new_id);
-  std::string temp_file = ".cover_art.png.tmp";
-
-  std::string artist_string = get_song_artist(new_id);
-  std::string title_string = get_song_title(new_id);
-
-  std::string query = "/search/tracks?q=" + urlencode(title_string + " " + artist_string);
-
-  httplib::Client cli("https://www.last.fm");
-  if (auto res = cli.Get(query)) {
-    std::cout << res->body << std::endl;
-  }
-
-  if (!_resize_cover_art(temp_file, new_base + ".png", 1000, 1000)) return false;
-  if (!_resize_cover_art(temp_file, new_base + ".small.png", 100, 100)) return false;
-
-  std::remove(temp_file.c_str());
-
-  return true;
-}
-
-bool download_song_from_query(const std::string& query) {
-  if (pause_main_input_handling) return false; // Exit if a download is ongoing
-
-  pause_main_input_handling = true;
-
-  std::cout << "Info: Attempting to download song from query '" << query << "'." << std::endl;
-
-  // Set progress bar
-  progress_bar_string = "Downloading song...";
-  progress_bar_amount = 0.f;
-  progress_bar_total = 9.f; // 3 in download_song_from_query
-                            // 3 in _resize_cover_art (* 2)
-
-  int max_id = -1;
-
-  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_data)) {
-    int id = std::stoi(entry.path().stem().string());
-
-    if (id > max_id)
-      max_id = id;
-  }
-
-  if (max_id == -1) {
-    return false;
-  }
-
-  auto new_id = max_id + 1;
-
-  progress_bar_amount += 1.f; // Done with getting the max_id
-
-  if (!_download_song_data_from_query(new_id, query)) return false;
-  std::cout << "Info: Downloaded song file and metadata for query '" << query << "'." << std::endl;
-  progress_bar_amount += 1.f; // Done with downloading song file from query
-  if (!_download_cover_art(new_id)) return false;
-  std::cout << "Info: Downloaded song cover art for id '" << new_id << "'." << std::endl;
-  progress_bar_amount += 1.f; // Done with downloading song cover from query
-
-  return true;
 }

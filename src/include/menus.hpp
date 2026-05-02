@@ -7,7 +7,7 @@
 #include "../../external/lib/RoundedRectangleShape.hpp"
 #include "data.hpp"
 
-std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos, sf::Font& default_font);
+std::unique_ptr<StaticData> init_general(sf::RenderWindow& window, sf::Vector2f search_size, sf::Vector2f search_pos);
 
 void search_reset_cursor();
 void search_move_cursor_left();
