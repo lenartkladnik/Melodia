@@ -14,6 +14,9 @@
 - when switching songs the song that was playing gets put into the same position as the newly selected song
 - player UI breaks when resized
 
+# text input
+- ~InputComponent should include its own input_string, prev_input_string, cursor_pos, ...~
+
 # hover over song in queue
 - ~change duration to ...~
 - if title is truncated and title is hovered show the whole title with a darker background behind it (like alt in browsers)
@@ -52,11 +55,13 @@
 
 - command line argument for adding song by title
 
-- Python script for:
-  - adding songs from Spotify playlist
-  - adding songs from Youtube playlist
+- adding all songs from Spotify playlist
+- adding all songs from Youtube playlist
 
 # general
+- use m_ prefix for member variables
+- use emplace_back instead of push_back on std::vector
+- use \n instead of std::endl when writing
 - add song removal and propagate song removal (check every playlist and remove the song if it is included)
 - use click_events to apply hover changes
 - use setCenter to position elements
@@ -64,6 +69,7 @@
 - create necessary directories if they don't exist
 - gracefully handle exceptions
 - create some sort of installer
+- download yt-dlp binary instead of storing it
 
 # building
 - add BUILDING.md

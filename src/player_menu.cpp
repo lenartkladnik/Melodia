@@ -6,10 +6,12 @@
 #include <cmath>
 #include "../external/lib/RoundedRectangleShape.hpp"
 #include "include/data.hpp"
-#include "include/menus.hpp"
 #include "include/animation.hpp"
+#include "include/playlist_selector_menu.hpp"
 
-std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist) {
+std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist) {
+  reset_globals();
+
   auto half = (float)(window_size.x / 2);
   auto third = (float)(window_size.x / 3);
 
@@ -47,11 +49,11 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   }
 
   sf::Text artist(default_font, artist_string);
-  artist.setCharacterSize(18);
+  setFontSize(artist, small_font_size);
   artist.setPosition({half - artist.getGlobalBounds().size.x / 2, padding_top + cover_size + 50.f});
   artist.setFillColor(artist_color);
   sf::Text title(default_font, title_string);
-  title.setCharacterSize(22);
+  setFontSize(title, medium_2_font_size);
   title.setPosition({half - title.getGlobalBounds().size.x / 2, padding_top + cover_size + 25.f});
   title.setFillColor(title_color);
 
@@ -242,7 +244,7 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   // Little text at the bottom of the queue
   sf::Text playlist_data(default_font, "");
-  playlist_data.setCharacterSize(20);
+  setFontSize(playlist_data, medium_font_size);
   playlist_data.setFillColor(light_text_color);
   playlist_data.setPosition({
     queue_contracted_width / 2 - 10.f,
@@ -250,26 +252,30 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   });
 
 
-  auto general = init_general(
+  auto search = std::make_shared<InputComponent>(
     window,
-    {queue_background.getGlobalBounds().size.x - 100.f, 40.f},
-    {50.f, queue_background.getPosition().y + 10.f}
+    "player_search_input_c", // id
+    sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f}, // size
+    sf::Vector2f{50.f, queue_background.getPosition().y + 10.f}, // position
+    "Search"
   );
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  // new_click_event(click_events, [](MenuData& menu_data) {
+  //   std::get<MenuData::PlayerData>(menu_data.data).data->search.clear_input();
+  // }, search.cancel_input_bounds(), sf::Mouse::Button::Left);
+
+  new_click_event(click_events, "main_control", [](MenuData& menu_data) {
     std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();
   }, main_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
-    std::cout << "clicked" << std::endl;
-
+  new_click_event(click_events, "next_control", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.song_id = player.queue[0];
     done_playing(player.queue, player.past_queue);
   }, next_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "previous_control", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     auto old_id = player.song_id;
@@ -284,19 +290,19 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, previous_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "trash", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Delete song" << std::endl;
   }, trash.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "manage_playlist", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Manage playlist popup" << std::endl;
   }, manage_playlist.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "favorite", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Toggle favorite song" << std::endl;
@@ -310,13 +316,13 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, favorite.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "edit", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Edit song" << std::endl;
   }, edit.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "progress", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.seeking = true;
@@ -324,7 +330,7 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     player.was_playing = player.music->is_playing();
   }, progress.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "queue_toggle", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.data->queue_expanded = !player.data->queue_expanded;
@@ -363,7 +369,7 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, queue_toggle.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "vol_icon", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     if (player.data->volume_tex->getNativeHandle() == player.data->vol_icon->getTexture().getNativeHandle()) {
@@ -380,13 +386,13 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, vol_icon.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "vol_slider", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.volume_slider_active = true;
   }, vol_slider.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
+  new_click_event(click_events, "live", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Toggle live mode" << std::endl;
@@ -400,64 +406,61 @@ std::unique_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, live.getGlobalBounds(), sf::Mouse::Button::Left);
 
- 
-  auto spdata = std::make_unique<StaticPlayerData>(StaticPlayerData {
-    main_control,
-    next_control,
-    previous_control,
-    queue_toggle,
-    favorite,
-    manage_playlist,
-    playlist_selector,
-    trash,
-    edit,
-    vol_icon,
-    live,
-    general->cancel_search,
-    artist,
-    title,
-    general->search_before_cursor,
-    general->search_after_cursor,
-    playlist_data,
-    cover,
-    cover_shadow,
-    cover_texture,
-    play_tex,
-    pause_tex,
-    cover_size,
-    player_background,
-    player_shadow_background,
-    progress_width,
-    progress,
-    progress_shadow,
-    next_tex,
-    previous_tex,
-    control_corner,
-    control_corner_shadow,
-    trash_tex,
-    playlist,
-    manage_playlist_tex,
-    favorite_empty_tex,
-    favorite_full_tex,
-    edit_tex,
-    queue_background,
-    queue_background_shadow,
-    general->search_background,
-    true,
-    side_expand_tex,
-    side_contract_tex,
-    false,
-    volume_tex,
-    mute_tex,
-    vol_slider,
-    vol_slider_shadow,
-    false,
-    live_full_tex,
-    live_empty_tex,
-    general->cancel_search_tex,
-  });
+  new_click_event(click_events, "playlist_selector", [&window](MenuData& menu_data) {
+    switch_to_playlist_selector(menu_data, window);
+  }, playlist_selector.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  return spdata;
+  auto data = std::make_shared<StaticPlayerData>();
+  data->search = search;
+  data->main_control = std::move(main_control);
+  data->next_control = std::move(next_control);
+  data->previous_control = std::move(previous_control);
+  data->queue_toggle = std::move(queue_toggle);
+  data->favorite = std::move(favorite);
+  data->manage_playlist = std::move(manage_playlist);
+  data->playlist_selector = std::move(playlist_selector);
+  data->trash = std::move(trash);
+  data->edit = std::move(edit);
+  data->vol_icon = std::move(vol_icon);
+  data->live = std::move(live);
+  data->artist = std::move(artist);
+  data->title = std::move(title);
+  data->playlist_data = std::move(playlist_data);
+  data->cover = std::move(cover);
+  data->cover_shadow = std::move(cover_shadow);
+  data->cover_texture = cover_texture;
+  data->play_tex = play_tex;
+  data->pause_tex = pause_tex;
+  data->cover_size = cover_size;
+  data->player_background = std::move(player_background);
+  data->player_shadow_background = std::move(player_shadow_background);
+  data->progress_width = progress_width;
+  data->progress = std::move(progress);
+  data->progress_shadow = std::move(progress_shadow);
+  data->next_tex = next_tex;
+  data->previous_tex = previous_tex;
+  data->control_corner = std::move(control_corner);
+  data->control_corner_shadow = std::move(control_corner_shadow);
+  data->trash_tex = trash_tex;
+  data->playlist = playlist;
+  data->manage_playlist_tex = manage_playlist_tex;
+  data->favorite_empty_tex = favorite_empty_tex;
+  data->favorite_full_tex = favorite_full_tex;
+  data->edit_tex = edit_tex;
+  data->queue_background = std::move(queue_background);
+  data->queue_background_shadow = std::move(queue_background_shadow);
+  data->search_placeholder_active = true;
+  data->side_expand_tex = side_expand_tex;
+  data->side_contract_tex = side_contract_tex;
+  data->queue_expanded = false;
+  data->volume_tex = volume_tex;
+  data->mute_tex = mute_tex;
+  data->vol_slider = std::move(vol_slider);
+  data->vol_slider_shadow = std::move(vol_slider_shadow);
+  data->queue_half_expanded = false;
+  data->live_full_tex = live_full_tex;
+  data->live_empty_tex = live_empty_tex;
+  return data;
 }
 
 void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
@@ -477,7 +480,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
   progress_done.setPosition(player_data.progress.getPosition());
 
   sf::Text time_left(default_font, music->get_human_left_duration());
-  time_left.setCharacterSize(20);
+  setFontSize(time_left, medium_font_size);
   time_left.setPosition({progress_done.getPosition().x + player_data.progress_width + 10.f, player_data.progress.getPosition().y - 10.f});
   time_left.setFillColor({66, 66, 66});
 
@@ -523,14 +526,15 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
   window.draw(player_data.queue_background);
   window.draw(*player_data.queue_toggle);
   if (player_data.queue_half_expanded) {
-    window.draw(player_data.search_background);
-    window.draw(*player_data.search_before_cursor);
-    if (show_cursor) {
-      search_draw_cursor(window, *player_data.search_before_cursor, player_data.search_background);
-    }
-    auto search_after_cursor = player_data.search_after_cursor; // Create a mutable copy of search_after_cursor
-    search_after_cursor->setPosition({player_data.search_before_cursor->getPosition().x + player_data.search_before_cursor->getGlobalBounds().size.x + 2.8f, player_data.search_before_cursor->getPosition().y});
-    window.draw(*search_after_cursor);
+    // window.draw(player_data.search_background);
+    // window.draw(*player_data.search_before_cursor);
+    // if (show_cursor) {
+    //   input_draw_cursor(window, *player_data.search_before_cursor, player_data.search_background);
+    // }
+    // auto search_after_cursor = player_data.search_after_cursor; // Create a mutable copy of search_after_cursor
+    // search_after_cursor->setPosition({player_data.search_before_cursor->getPosition().x + player_data.search_before_cursor->getGlobalBounds().size.x + 2.8f, player_data.search_before_cursor->getPosition().y});
+    // window.draw(*search_after_cursor);
+    player_data.search->draw();
   }
 
   if (player_data.queue_expanded) {
@@ -545,11 +549,11 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
     sf::Text queue_title(default_font, "");
     queue_title.setFillColor(title_color);
-    queue_title.setCharacterSize(18);
+    setFontSize(queue_title, small_font_size);
 
     sf::Text queue_artist(default_font, "");
     queue_artist.setFillColor(artist_color);
-    queue_artist.setCharacterSize(18);
+    setFontSize(queue_artist, small_font_size);
 
     sf::RoundedRectangleShape queue_entry_background({player_data.queue_background.getGlobalBounds().size.x - 25.f, queue_cover.getGlobalBounds().size.y + 10.f}, 8, main_n);
     queue_entry_background.setFillColor(background_shadow_color);
@@ -559,7 +563,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
     sf::Text queue_entry_duration(default_font, "");
     queue_entry_duration.setFillColor(light_text_color);
-    queue_entry_duration.setCharacterSize(18);
+    setFontSize(queue_entry_duration, small_font_size);
 
     sf::RoundedRectangleShape now_playing_bar({queue_entry_background.getGlobalBounds().size.x - 12.f, 4.f}, 2, main_n);
     now_playing_bar.setFillColor(main_color);
@@ -573,13 +577,13 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
     sf::Sprite queue_play(queue_play_tex);
 
     auto get_queue_entry_position = [&player_data](int index) {
-      return player_data.search_background.getPosition().y + player_data.search_background.getGlobalBounds().size.y + 20.f + (queue_cover_size + 20.f) * index;
+      return player_data.search->background_pos().y + player_data.search->background_bounds().size.y + 20.f + (queue_cover_size + 20.f) * index;
     };
 
-    bool search_active = !search_string.empty();
-    if (search_active) {
-      window.draw(*player_data.cancel_queue_search);
-    }
+    bool search_active = player_data.search->is_active();
+    // if (search_active) {
+    //   window.draw(*player_data.cancel_queue_search);
+    // }
 
     // Dynamically set the attributes for these objects since player.queue can change at any time
 
@@ -687,7 +691,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
         title_string += "...";
       }
 
-      if (search_active && !matching(search_string, artist_string, match_diff) && !matching(search_string, title_string, match_diff)) continue; // Skip because it's not a match
+      if (search_active && !matching(player_data.search->get_input_string(), artist_string, match_diff) && !matching(player_data.search->get_input_string(), title_string, match_diff)) continue; // Skip because it's not a match
 
       queue_title.setString(title_string);
       queue_title.setPosition({queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x + 5.f, queue_cover.getPosition().y + queue_cover_size / 3 - 10.f});
@@ -702,6 +706,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       queue_cover_shadow.setPosition({queue_cover.getPosition().x + 2.f, queue_cover.getPosition().y + 2.f});
 
       queue_entry_duration.setString(queue_entry_player.get_human_total_duration());
+      setFontSize(queue_entry_duration, small_font_size);
       queue_entry_duration.setPosition({
         queue_entry_background.getPosition().x + queue_entry_background.getGlobalBounds().size.x - queue_entry_duration.getGlobalBounds().size.x - 20.f,
         queue_entry_background.getPosition().y + queue_entry_background.getGlobalBounds().size.y / 2 - queue_entry_duration.getGlobalBounds().size.y / 2
@@ -734,7 +739,8 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
         if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
           queue_entry_duration.setString("\n...\n"); // Add the newlines to create a bigger clickable area
           queue_entry_duration.setFillColor(text_color);
-          queue_entry_duration.move({0.f, -24.f});
+          setFontSize(queue_entry_duration, medium_2_font_size);
+          queue_entry_duration.move({0, -(queue_entry_duration.getGlobalBounds().size.y / 2)});
 
           if (id != player.song_id) {
             draw_queue_play = true;
@@ -820,7 +826,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       window.draw(queue_title);
       window.draw(queue_artist);
 
-
       not_found = false;
       idx++;
     }
@@ -835,7 +840,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       }
 
       nothing_exists.setFillColor(light_text_color);
-      nothing_exists.setCharacterSize(18);
+      setFontSize(nothing_exists, small_font_size);
       nothing_exists.setPosition({player_data.queue_background.getGlobalBounds().size.x / 2 - nothing_exists.getGlobalBounds().size.x / 2, 100.f});
 
       window.draw(nothing_exists);
@@ -862,10 +867,7 @@ void switch_to_player(MenuData& menu_data, std::string playlist) {
   menu_data.data = MenuData::PlayerData();
   menu_data.type = MenuData::Player;
 
-  search_max_char = player_search_max_char;
-  search_results = {};
-  prev_search_string = "";
-  click_events = {};
+  input_max_char = player_search_max_char;
 
   auto& pd = std::get<MenuData::PlayerData>(menu_data.data);
 

@@ -3,11 +3,11 @@
 #include <string>
 #include <algorithm>
 #include <math.h>
-#include "include/menus.hpp"
 #include "include/player_menu.hpp"
 #include "include/playlist_selector_menu.hpp"
 #include "include/data.hpp"
 #include "include/animation.hpp"
+#include "include/events.hpp"
 
 using namespace sf;
 
@@ -20,8 +20,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  if (!default_font.openFromFile(base_path_misc + "JetBrainsMono-Regular.ttf")) {
-    std::cerr << "Error: Failed to load font 'JetBrainsMono-Regular.tff'." << std::endl;
+  if (!default_font.openFromFile(base_path_misc + "base-font.ttf")) {
+    std::cerr << "Error: Failed to load font 'base-font.tff'." << std::endl;
     return 1;
   }
 
@@ -30,6 +30,13 @@ int main(int argc, char *argv[]) {
   MenuData menu_data;
 
   switch_to_playlist_selector(menu_data, window); // Start as the playlist selector
+
+
+  getFontOffsetPixels(small_font_size);
+  getFontOffsetPixels(medium_font_size);
+  getFontOffsetPixels(medium_2_font_size);
+  getFontOffsetPixels(large_font_size);
+
 
   auto open_queue = [](auto* player, auto speed){
     player->data->queue_toggle->setTexture(*player->data->side_contract_tex);
@@ -105,7 +112,7 @@ int main(int argc, char *argv[]) {
 
             auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
-            search_unfocus(*player.data->search_before_cursor, *player.data->search_after_cursor);
+            player.data->search->unfocus();
 
             break;
           }
@@ -118,36 +125,44 @@ int main(int argc, char *argv[]) {
 
             auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
-            search_unfocus(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
+            playlist_sel.data->search->unfocus();
 
             // After the resize all items must be re-rendered
-            switch_to_playlist_selector(menu_data, window);
+          switch_to_playlist_selector(menu_data, window);
 
-            break;
-          }
+          break;
         }
       }
+    }
 
       if (!pause_main_input_handling) {
-        const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
-        if (mouseWheelScrolled) {
-          auto pos = window.mapPixelToCoords(mouseWheelScrolled->position);
+        on<sf::Event::MouseWheelScrolled>(*event, scroll_events,
+          [&](const auto* e, const auto& item) { return item.can_scroll; },
+          [&](const auto* e, const auto* item) { item->scroll_offset -= e->delta * scroll_speed; }
+        );
 
-          for (const auto& each : scroll_events) {
-            if (each.can_scroll && each.bounds.contains(pos)) {
-              each.scroll_offset -= mouseWheelScrolled->delta * scroll_speed; // Invert
-            }
+        on<sf::Event::MouseButtonPressed>(*event, click_events,
+          [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
+          [&](const auto* e, const auto* item) { item->function(menu_data); }
+        );
+
+        on<sf::Event::MouseButtonPressed>(*event, focus_events,
+          [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
+          [&](const auto* e, const auto* item) {
+            auto pos = window.mapPixelToCoords(e->position, item->view);
+            item->function(menu_data, pos);
           }
-        }
+        );
 
-        const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>();
-        if (mouseButtonPressed) {
-          for (const auto& each : click_events) {
-            auto pos = window.mapPixelToCoords(mouseButtonPressed->position, each.view);
+        on<sf::Event::TextEntered>(*event, text_events,
+          [&](const auto* e, const auto& item) { return item.input_component->is_active() && !item.input_component->hidden; },
+          [&](const auto* e, const auto* item) { item->input_component->write_input(e->unicode); }
+        );
 
-            if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
-              each.function(menu_data);
-            }
+        // Update all text
+        for (const auto& each : text_events) {
+          if (each.input_component->is_active() && !each.input_component->hidden) {
+            each.input_component->update();
           }
         }
 
@@ -161,39 +176,39 @@ int main(int argc, char *argv[]) {
 
             auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
-            if (search_active) {
-              if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-                search_move_cursor_left();
-              }
-              else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-                search_move_cursor_right();
-              }
-            } else {
-              // Keyboard controls (turned off when search_active)
+            // if (input_active) {
+            //   if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
+            //     player.data->search->move_cursor_left();
+            //   }
+            //   else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
+            //     player.data->search->move_cursor_right();
+            //   }
+            // } else {
+              // Keyboard controls (turned off when input_active)
 
-              if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
-                if (keyPressed->scancode == sf::Keyboard::Scancode::Space) {
-                  player.music->toggle_play_state();
-                }
-              }
-            }
+            //   if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
+            //     if (keyPressed->scancode == sf::Keyboard::Scancode::Space) {
+            //       player.music->toggle_play_state();
+            //     }
+            //   }
+            // }
 
-            if (const auto* text = event->getIf<Event::TextEntered>()) {
-              if (search_active) {
-                auto input = text->unicode;
+            // if (const auto* text = event->getIf<Event::TextEntered>()) {
+            //   if (input_active) {
+            //     auto input = text->unicode;
 
-                search_input(input);
-              }
-            }
+            //     player.data->search->write_input(input);
+            //   }
+            // }
 
-            if (mouseButtonPressed) {
-              auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
+            // if (mouseButtonPressed) {
+            //   auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
 
-              if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-                if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) {
-                  switch_to_playlist_selector(menu_data, window);
-                  break;
-                }
+            // TODO:  if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+            //          if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) {
+            //            switch_to_playlist_selector(menu_data, window);
+            //            break;
+            //          }
 
 
                 // ----------
@@ -202,14 +217,14 @@ int main(int argc, char *argv[]) {
 
                 // Actions that require focusing an element
 
-                if (player.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
-                  search_focus(pos, *player.data->search_before_cursor, *player.data->search_after_cursor);
-                }
-                else { // Clicked anywhere else
-                  search_unfocus(*player.data->search_before_cursor, *player.data->search_after_cursor);
-                }
-              }
-            }
+                // if (player.data->search->background_bounds().contains(pos)) { // Search is active
+                //   player.data->search->focus(pos);
+                // }
+                // else { // Clicked anywhere else
+                //   player.data->search->unfocus();
+                // }
+              // }
+            // }
 
           break;
           }
@@ -224,32 +239,44 @@ int main(int argc, char *argv[]) {
 
             playlist_sel.reset_cursor = true;
 
-            if (search_active) {
-              if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-                search_move_cursor_left();
-              }
-              else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-                search_move_cursor_right();
-              }
-            }
-
-            if (const auto* text = event->getIf<Event::TextEntered>()) {
-              if (search_active) {
-                auto input = text->unicode;
-
-                search_input(input);
+            // Progress bar
+            if (!progress_bar_string.empty()) {
+              if (progress_bar_amount == progress_bar_total) {
+                download_song_thread->join();
+                pause_main_input_handling = false;
+                playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
+                progress_bar_string = ""; // Reset so that the .empty check above succeeds
               }
             }
 
+            // if (input_active) {
+            //   if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
+            //     playlist_sel.data->search->move_cursor_left();
+            //   }
+            //   else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
+            //     playlist_sel.data->search->move_cursor_right();
+            //  }
+            // }
+
+            // if (const auto* text = event->getIf<Event::TextEntered>()) {
+            //   if (input_active) {
+            //     auto input = text->unicode;
+
+            //     playlist_sel.data->search->write_input(input);
+            //   }
+            // }
+
+            const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
             if (mouseWheelScrolled) {
-              if (!search_string.empty())
+              if (playlist_sel.data->search->not_empty())
                 search_res_click_events.clear();
             }
 
+            const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>();
             if (mouseButtonPressed) {
               auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
 
-              if (!search_string.empty()) {
+              if (playlist_sel.data->search->not_empty()) {
                 for (const auto& each : search_res_click_events) {
                   if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
                     each.function(menu_data);
@@ -257,18 +284,18 @@ int main(int argc, char *argv[]) {
                 }
               }
 
-              if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+              // if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
                 // Unfocusing requires detection of clicks on the whole
                 // screen so I have not gotten around to implementing it in
                 // a click event
 
-                if (playlist_sel.data->search_background.getGlobalBounds().contains(pos)) { // Search is active
-                  search_focus(pos, playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
-                }
-                else { // Clicked anywhere else
-                  search_unfocus(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
-                }
-              }
+              //   if (playlist_sel.data->search->background_bounds().contains(pos)) { // Search is active
+              //     playlist_sel.data->search->focus(pos);
+              //   }
+              //   else { // Clicked anywhere else
+              //     playlist_sel.data->search->unfocus();
+              //   }
+              // }
             }
 
           break;
@@ -282,16 +309,6 @@ int main(int argc, char *argv[]) {
       }
     } // end while for event handling
 
-    // Progress bar
-    if (!progress_bar_string.empty()) {
-      if (progress_bar_amount == progress_bar_total) {
-        download_song_thread->join();
-        pause_main_input_handling = false;
-        prev_search_string = ""; // Reset the search (so the new downloaded song is shown)
-        progress_bar_string = ""; // Reset so that the .empty check above succeeds
-      }
-    }
-
     switch (menu_data.type) {
       case (MenuData::Player): {
         if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
@@ -301,9 +318,9 @@ int main(int argc, char *argv[]) {
 
         auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
-        if (search_active) {
-          search_running(*player.data->search_before_cursor, *player.data->search_after_cursor);
-        }
+        // if (input_active) {
+        //   player.data->search->update();
+        // }
 
         if (player.seeking) {
           if (!sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
@@ -363,7 +380,8 @@ int main(int argc, char *argv[]) {
 
         // Hover effects
 
-        if (player.data->search_background.getGlobalBounds().contains(pos)) {
+        // TODO: Figure out how to only change hover state when the obj has hidden false
+        if (player.data->search->background_bounds().contains(pos)) {
           window.setMouseCursor(text_cursor);
           player.reset_cursor = false;
         }
@@ -380,7 +398,7 @@ int main(int argc, char *argv[]) {
             player.data->vol_icon->getGlobalBounds().contains(pos) ||
             player.data->vol_slider.getGlobalBounds().contains(pos) ||
             player.data->live->getGlobalBounds().contains(pos) ||
-            player.data->cancel_queue_search->getGlobalBounds().contains(pos) ||
+            player.data->search->cancel_input_bounds().contains(pos) ||
             (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) ||
             !player.reset_cursor
           ) {
@@ -403,21 +421,22 @@ int main(int argc, char *argv[]) {
       case (MenuData::PlaylistSelector): {
         auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
-        if (search_active) {
-          search_running(playlist_sel.data->search_before_cursor, playlist_sel.data->search_after_cursor);
-        }
+        // if (input_active) {
+        //   playlist_sel.data->search->update();
+        // }
 
         auto pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
         // Hover effects
 
-        if (playlist_sel.data->search_background.getGlobalBounds().contains(pos) && !playlist_sel.data->cancel_search.getGlobalBounds().contains(pos)) {
+        // TODO: Figure out how to only change hover state when the obj has hidden false
+        if (playlist_sel.data->search->background_bounds().contains(pos) && !playlist_sel.data->search->cancel_input_bounds().contains(pos)) {
           window.setMouseCursor(text_cursor);
           playlist_sel.reset_cursor = false;
         }
         else if (
-            playlist_sel.data->add_playlist.getGlobalBounds().contains(pos) ||
-            playlist_sel.data->cancel_search.getGlobalBounds().contains(pos) ||
+            playlist_sel.data->add_playlist->getGlobalBounds().contains(pos) ||
+            playlist_sel.data->search->cancel_input_bounds().contains(pos) ||
             !playlist_sel.reset_cursor
           ) {
 
@@ -428,6 +447,7 @@ int main(int argc, char *argv[]) {
         else if (playlist_sel.reset_cursor) {
           window.setMouseCursor(default_cursor);
         }
+
 
         if (playlist_sel.data) {
           if (!display_playlist_selector(playlist_sel, window, menu_data)) break; // false returned when switched to new menu

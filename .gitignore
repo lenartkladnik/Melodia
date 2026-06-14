@@ -1,9 +1,10 @@
-alias_builds.sh
+open_nvim.sh
 .sconsign.dblite
 *.o
 build/
-bin/
+dist/
 external/build/
 external/prog/
 todo/
+src/*_dummy.cpp
 .music_data/

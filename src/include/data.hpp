@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <thread>
+#include <unordered_map>
 #include "../../external/lib/RoundedRectangleShape.hpp"
 
 // Constants
@@ -38,11 +39,17 @@ extern const float move_speed;
 extern const float match_diff;
 extern const int player_search_max_char;
 extern const int playlist_search_max_char;
-extern int search_max_char;
+extern int input_max_char;
 extern const int queue_max_char;
 extern const float queue_contracted_width;
 extern const float control_corner_gap;
 extern const float scroll_speed;
+
+extern const float font_multiplier;
+extern const float small_font_size;
+extern const float medium_font_size;
+extern const float medium_2_font_size;
+extern const float large_font_size;
 
 extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings settings;
@@ -71,22 +78,25 @@ extern const sf::Cursor hand_cursor;
 
 extern sf::Font default_font;
 
-extern bool search_active;
-extern bool show_cursor;
-extern size_t cursor_pos;
+// extern bool input_active;
+// extern size_t cursor_pos;
 extern bool held_left_mb_down;
-extern bool reset_cursor;
-extern std::string search_string;
-extern std::string prev_search_string;
+// extern bool reset_cursor;
+// extern std::string input_string;
+// extern std::string prev_input_string;
 extern std::vector<int> search_results;
 extern std::string progress_bar_string;
 extern std::string progress_bar_doing_string;
+// extern std::string input_prompt;
 extern float progress_bar_amount;
 extern float progress_bar_total;
 extern std::unique_ptr<std::thread> download_song_thread;
 extern bool pause_main_input_handling;
 extern float playlist_sel_scroll;
 extern bool can_search_string_scroll;
+
+class PopupComponent;
+extern std::unordered_map<std::string, std::shared_ptr<PopupComponent>> popup_components;
 
 // Function definitions for data.cpp
 
@@ -103,6 +113,84 @@ bool matching(const std::string& s1, const std::string& s2, float diff, const ch
 int get_start_song(std::vector<int>& playlist);
 std::string seconds_to_human_readable(float seconds);
 std::vector<int> search_all_songs(const std::string& query);
+float getFontOffsetPixels(float target_size);
+void setFontSize(sf::Text& text, float target_size, unsigned int raster_mul = 2);
+void reset_globals();
+
+enum class AnimationStage {
+  start,
+  half,
+  end,
+};
+
+class UIComponent; // Forward declare UIComponent so the events can use it
+
+class MenuData; // Forward declare MenuData so ClickEvent can use it
+
+struct UIEvent {
+  std::string id;
+  sf::FloatRect bounds;
+  sf::View view;
+  UIComponent* component = nullptr;
+};
+
+struct ClickEvent : UIEvent {
+  std::function<void(MenuData&)> function;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<ClickEvent> click_events;
+extern std::vector<ClickEvent> search_res_click_events;
+void new_click_event(
+  std::vector<ClickEvent>& container,
+  std::string id,
+  std::function<void(MenuData&)> function,
+  sf::FloatRect bounds,
+  sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr,
+  sf::View view = window.getDefaultView()
+);
+
+struct FocusEvent : UIEvent {
+  std::function<void(MenuData&, sf::Vector2f&)> function;
+  std::function<void(MenuData&)> else_function;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<FocusEvent> focus_events;
+void new_focus_event(
+  std::vector<FocusEvent>& container,
+  std::string id,
+  std::function<void(MenuData&, sf::Vector2f&)> function, // Will get called if the click is within bounds
+  std::function<void(MenuData&)> else_function, // Will get called if click is out of bounds
+  sf::FloatRect bounds,
+  sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr,
+  sf::View view = window.getDefaultView()
+);
+
+struct ScrollEvent : UIEvent {
+  float& scroll_offset;
+  bool& can_scroll;
+};
+
+extern std::vector<ScrollEvent> scroll_events;
+void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll, UIComponent* component = nullptr);
+
+class InputComponent; // Forward declare InputComponent so TextEvent can use it
+
+struct TextEvent : UIEvent {
+  InputComponent* input_component;
+};
+
+extern std::vector<TextEvent> text_events;
+void new_text_event(std::vector<TextEvent>& container, std::string id, InputComponent* input_component, UIComponent* component = nullptr);
+
+
+struct KbEvent : UIEvent {};
+
+extern std::vector<KbEvent> kb_events;
+void new_kb_event(std::vector<KbEvent>& container, std::string id, UIComponent* component = nullptr);
 
 // Adapted from:
 // https://en.sfml-dev.org/forums/index.php?topic=24133.0
@@ -314,27 +402,446 @@ class MusicPlayer {
     }
 };
 
-struct StaticData {
-  sf::RoundedRectangleShape search_background;
-  sf::RoundedRectangleShape search_shadow;
-  sf::Text search_before_cursor;
-  sf::Text search_after_cursor;
-  std::shared_ptr<sf::Texture> cancel_search_tex;
-  sf::Sprite cancel_search;
+class UIComponent {
+  public:
+    std::string id;
+    bool hidden;
+    int z_index;
 
-  StaticData() = default;
-  ~StaticData() = default;
+    virtual void draw() = 0;
+
+    UIComponent(std::string id, bool hidden = false, int z_index = 0)
+      : id(std::move(id)), hidden(hidden), z_index(z_index) {}
+
+    virtual ~UIComponent() = default;
+};
+
+class InputComponent : public UIComponent {
+  private:
+    std::string input_string = "";
+    size_t cursor_pos = 0;
+    sf::RenderWindow& window;
+    bool show_cursor = false;
+    bool reset_cursor_flag = false;
+    bool input_active = false;
+    sf::Clock cursor_clock;
+    std::string prev_input_string = "";
+    std::string input_prompt;
+    sf::RoundedRectangleShape input_background;
+    sf::RoundedRectangleShape input_shadow;
+    sf::Text input_before_cursor;
+    sf::Text input_after_cursor;
+    std::shared_ptr<sf::Texture> cancel_input_tex;
+    sf::Sprite cancel_input;
+
+    static std::shared_ptr<sf::Texture> load_cancel_texture() {
+      static std::shared_ptr<sf::Texture> tex;
+      if (!tex) {
+        tex = std::make_shared<sf::Texture>();
+        if (!tex->loadFromFile(base_path_misc + "close.png")) {
+            std::cerr << "Error: Failed to load cancel texture." << std::endl;
+        }
+        tex->setSmooth(true);
+      }
+      return tex;
+    }
+
+  public:
+    void draw() override {
+      if (!this->hidden) {
+        window.draw(input_background);
+        window.draw(input_before_cursor);
+        window.draw(input_after_cursor);
+        window.draw(cancel_input);
+        if (show_cursor)
+          this->draw_cursor();
+      }
+    }
+
+    void reset_cursor() {
+      cursor_clock.restart();
+      show_cursor = true;
+    }
+
+    void move_cursor_left() {
+      if (cursor_pos > 0) {
+        // Keep cursor solid while changing cursor pos
+        this->reset_cursor();
+
+        cursor_pos--;
+      }
+    }
+
+    void move_cursor_right() {
+      if (cursor_pos < input_string.size()) {
+        // Keep cursor solid while changing cursor pos
+        this->reset_cursor();
+
+        cursor_pos++;
+      }
+    }
+
+    void update() {
+      if (cursor_clock.getElapsedTime() >= sf::milliseconds(500)) {
+        cursor_clock.restart();
+        show_cursor = !show_cursor;
+      }
+
+      input_before_cursor.setString(input_string.substr(0, cursor_pos));
+      input_after_cursor.setString(input_string.substr(cursor_pos));
+    }
+
+    void write_input(char32_t input) {
+      // Keep cursor solid while inputting
+      this->reset_cursor();
+
+      if (input < 32 || input > 126) {
+        switch (input) {
+          case 8:
+            if (input_string.size() > 0) {
+              cursor_pos--;
+              input_string.erase(cursor_pos, 1);
+            }
+            break;
+        }
+      }
+      else if ((int)input_string.size() < input_max_char) {
+        input_string.insert(cursor_pos, char32_to_utf8(input));
+        cursor_pos++;
+      }
+    }
+
+    void focus(sf::Vector2f& pos) {
+      input_before_cursor.setFillColor(text_color);
+      if (input_active) { // Set cursor pos
+        if (input_string.empty()) {
+          cursor_pos = 0;
+        }
+        else {
+          auto relative_before_cursor = (pos.x - input_before_cursor.getPosition().x);
+          auto c_pos = round(relative_before_cursor / (input_before_cursor.getGlobalBounds().size.x + input_after_cursor.getGlobalBounds().size.x) * input_string.size());
+
+          // Keep cursor solid while changing cursor pos
+          this->reset_cursor();
+
+          if (c_pos > input_string.size()) {
+            cursor_pos = input_string.size();
+          }
+          else {
+            cursor_pos = c_pos;
+          }
+        }
+      }
+      else {
+        input_active = true;
+        input_before_cursor.setString(input_string.substr(0, cursor_pos));
+        input_after_cursor.setString(input_string.substr(cursor_pos));
+      }
+    }
+
+    void unfocus() {
+      input_active = false;
+      show_cursor = false;
+
+      if (input_string.size() == 0) {
+        input_after_cursor.setFillColor(text_color);
+        input_before_cursor.setFillColor(light_text_color);
+        input_before_cursor.setString(input_prompt);
+      }
+    }
+
+    bool is_active() {
+      return input_active;
+    }
+
+    bool not_empty() {
+      return !input_string.empty();
+    }
+
+    bool should_input_refresh() {
+      return prev_input_string.empty() || prev_input_string != input_string;
+    }
+
+    void force_input_refresh() {
+      prev_input_string = ""; // This will trigger at least the prev_input_string.empty() requirement for a refresh
+    }
+
+    void input_refresh() {
+      prev_input_string = input_string;
+    }
+
+    void clear_input() {
+      input_string = "";
+      cursor_pos = 0;
+    }
+
+    std::string& get_input_string() {
+      return input_string;
+    }
+
+    void draw_cursor() {
+      sf::RectangleShape cursor({1.2, input_background.getGlobalBounds().size.y - 15.f});
+      cursor.setPosition({input_before_cursor.getPosition().x + 2.f + input_before_cursor.getGlobalBounds().size.x, input_before_cursor.getPosition().y + 1.f});
+      cursor.setFillColor(white_color);
+      window.draw(cursor);
+    }
+
+    void draw_input_shadow() {
+      window.draw(input_shadow);
+    }
+
+    sf::FloatRect background_bounds() {
+      return input_background.getGlobalBounds();
+    }
+
+    sf::Vector2f background_pos() {
+      return input_background.getPosition();
+    }
+
+    sf::FloatRect cancel_input_bounds() {
+      return cancel_input.getGlobalBounds();
+    }
+
+    InputComponent(
+      sf::RenderWindow& render_window,
+      std::string id,
+      sf::Vector2f input_size,
+      sf::Vector2f input_pos,
+      std::string prompt,
+      bool hidden = false,
+      int z_index = 0
+    )
+      : UIComponent(id, hidden, z_index),
+        window(render_window),
+        input_prompt(prompt),
+        input_before_cursor(default_font, prompt, 20),
+        input_after_cursor(default_font, "", 20),
+        cancel_input_tex(load_cancel_texture()),
+        cancel_input(*cancel_input_tex)
+
+    {
+      input_string = "";
+      cursor_pos = 0;
+
+      input_background.setSize(input_size);
+      input_background.setCornersRadius(20);
+      input_background.setCornerPointCount(main_n);
+      input_background.setPosition(input_pos);
+      input_background.setFillColor(dark_background_color);
+
+      input_shadow.setSize({input_background.getGlobalBounds().size.x + 5.f, input_background.getGlobalBounds().size.y + 5.f});
+      input_shadow.setCornersRadius(20);
+      input_shadow.setCornerPointCount(main_n);
+      input_shadow.setPosition({input_background.getPosition().x - 2.5f, input_background.getPosition().y + 3.f});
+      input_shadow.setFillColor(dark_main_color);
+
+      input_before_cursor.setFillColor(light_text_color);
+      setFontSize(input_before_cursor, medium_font_size);
+      input_before_cursor.setPosition({input_background.getPosition().x + 10.f, input_background.getPosition().y + 6.f});
+
+
+      input_after_cursor.setFillColor(text_color);
+      setFontSize(input_after_cursor, medium_font_size);
+      input_after_cursor.setPosition(input_before_cursor.getPosition());
+
+
+      cancel_input.setPosition({
+        input_background.getPosition().x + input_background.getGlobalBounds().size.x - cancel_input.getGlobalBounds().size.x - 14.f,
+        input_background.getPosition().y + 9.f
+      });
+
+      new_click_event(click_events, id, [this](MenuData& menu_data) {
+        if (!this->hidden)
+          this->clear_input();
+      }, cancel_input.getGlobalBounds(), sf::Mouse::Button::Left, this);
+
+      new_focus_event(focus_events, id,
+        [this](MenuData& menu_data, sf::Vector2f pos) {
+          if (!this->hidden)
+            this->focus(pos);
+        },
+        [this](MenuData& menu_data) {
+          if (!this->hidden)
+            this->unfocus();
+        },
+        input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
+
+      new_text_event(text_events, id, this, this);
+    }
+
+
+  InputComponent() = delete;
+  ~InputComponent() = default;
 
   // Disallow copy
-  StaticData(const StaticData&) = delete;
-  StaticData& operator=(const StaticData&) = delete;
+  InputComponent(const InputComponent&) = delete;
+  InputComponent& operator=(const InputComponent&) = delete;
+
+  // Disallow move
+  InputComponent(InputComponent&&) = delete;
+  InputComponent& operator=(InputComponent&&) = delete;
+};
+
+class ButtonComponent : public UIComponent {
+  // TODO:
+  // - Add pressed down styling
+
+  private:
+    sf::RenderWindow& window;
+    sf::RoundedRectangleShape button_shape;
+    sf::Text button_text;
+    std::function<void(MenuData&)> function;
+
+  public:
+    void draw() override {
+      if (!this->hidden) {
+        window.draw(button_shape);
+        window.draw(button_text);
+      }
+    }
+
+    void press() {
+    }
+
+    sf::FloatRect button_bounds() {
+      return button_shape.getGlobalBounds();
+    }
+
+    ButtonComponent(
+      sf::RenderWindow& render_window,
+      std::string id,
+      std::string text,
+      sf::Vector2f size,
+      sf::Vector2f pos,
+      std::function<void(MenuData&)> function,
+      bool hidden = false,
+      int z_index = 0,
+      sf::Color button_shape_color = dark_background_color,
+      sf::Color button_text_color = text_color,
+      int corner_radius = 10
+    )
+      : UIComponent(id, hidden, z_index),
+        window(render_window),
+        button_text(default_font, text, 0),
+        function(function)
+    {
+      button_shape.setSize(size);
+      button_shape.setPosition(pos);
+      button_shape.setFillColor(button_shape_color);
+      button_shape.setCornersRadius(corner_radius);
+      button_shape.setCornerPointCount(main_n);
+
+      int text_size = 0;
+      if (text.size() != 0)
+        text_size = (int)((size.x/text.size()) * font_multiplier);
+
+      setFontSize(button_text, text_size);
+      button_text.setFillColor(button_text_color);
+      button_text.setPosition({
+        button_shape.getPosition().x + button_shape.getGlobalBounds().size.x / 2 - button_text.getGlobalBounds().size.x / 2,
+        button_shape.getPosition().y + button_shape.getGlobalBounds().size.y / 2 - button_text.getGlobalBounds().size.y
+      });
+
+      new_click_event(click_events, id, [this, function](MenuData& menu_data) { if (!this->hidden) function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
+    }
+
+    ~ButtonComponent() = default;
+
+  // Disallow copy
+  ButtonComponent(const ButtonComponent&) = delete;
+  ButtonComponent& operator=(const ButtonComponent&) = delete;
+
+  // Disallow move
+  ButtonComponent(ButtonComponent&&) = delete;
+  ButtonComponent& operator=(ButtonComponent&&) = delete;
+};
+
+class PopupComponent : public UIComponent {
+  private:
+    std::unordered_map<std::string, std::shared_ptr<InputComponent>> input_components;
+    std::unordered_map<std::string, std::shared_ptr<ButtonComponent>> button_components;
+    std::unordered_map<std::string, sf::RoundedRectangleShape> rounded_rectangle_shapes;
+
+  public:
+    void draw() override {
+      if (!this->hidden) {
+        draw_rounded_rectangle_shapes();
+        draw_input_components();
+        draw_button_components();
+      }
+    }
+
+    void new_input(std::string input_id, std::shared_ptr<InputComponent> input_component) {
+      input_component->z_index += this->z_index;
+
+      input_components.insert({input_id, input_component});
+
+      new_click_event(click_events, input_id, [this, input_id](MenuData& menu_data) {
+        popup_components.at(id)->get_input(input_id)->clear_input();
+      }, popup_components.at(id)->get_input(input_id)->cancel_input_bounds(), sf::Mouse::Button::Left, this);
+    }
+
+    void new_button(std::string id, std::shared_ptr<ButtonComponent> button_component) {
+      button_component->z_index += this->z_index;
+
+      button_components.insert({id, std::move(button_component)});
+    }
+
+    void new_rounded_rectangle_shape(std::string id, sf::RoundedRectangleShape rounded_rectangle_shape) {
+      rounded_rectangle_shapes.insert({id, rounded_rectangle_shape});
+    }
+
+    std::shared_ptr<InputComponent> get_input(std::string input_id) {
+      return input_components.at(input_id);
+    }
+
+    std::shared_ptr<ButtonComponent> get_button(std::string button_id) {
+      return button_components.at(button_id);
+    }
+
+    void draw_input_components() {
+      for (auto it = input_components.begin(); it != input_components.end(); it++) {
+        it->second->draw();
+      }
+    }
+
+    void draw_button_components() {
+      for (auto it = button_components.begin(); it != button_components.end(); it++) {
+        it->second->draw();
+      }
+    }
+
+    void draw_rounded_rectangle_shapes() {
+      for (auto it = rounded_rectangle_shapes.begin(); it != rounded_rectangle_shapes.end(); it++) {
+        window.draw(it->second);
+      }
+    }
+
+    static PopupComponent* Create(std::string id) {
+      auto instance = std::make_shared<PopupComponent>(id);
+      PopupComponent* ptr = instance.get();
+
+      popup_components.insert({id, std::move(instance)});
+
+      return ptr;
+    }
+
+    PopupComponent(std::string id)
+      : UIComponent(id) {}
+
+    ~PopupComponent() = default; // The program erases the popup id by itself which causes the pointers to be freed
+
+  // Disallow copy
+  PopupComponent(const PopupComponent&) = delete;
+  PopupComponent& operator=(const PopupComponent&) = delete;
 
   // Allow move
-  StaticData(StaticData&&) = default;
-  StaticData& operator=(StaticData&&) = default;
+  PopupComponent(PopupComponent&&) = default;
+  PopupComponent& operator=(PopupComponent&&) = default;
 };
 
 struct StaticPlayerData {
+  std::shared_ptr<InputComponent> search;
   std::optional<sf::Sprite> main_control;
   std::optional<sf::Sprite> next_control;
   std::optional<sf::Sprite> previous_control;
@@ -346,11 +853,8 @@ struct StaticPlayerData {
   std::optional<sf::Sprite> edit;
   std::optional<sf::Sprite> vol_icon;
   std::optional<sf::Sprite> live;
-  std::optional<sf::Sprite> cancel_queue_search;
   std::optional<sf::Text> artist;
   std::optional<sf::Text> title;
-  std::optional<sf::Text> search_before_cursor;
-  std::optional<sf::Text> search_after_cursor;
   std::optional<sf::Text> playlist_data;
   sf::RoundedRectangleShape cover;
   sf::RoundedRectangleShape cover_shadow;
@@ -375,7 +879,6 @@ struct StaticPlayerData {
   std::shared_ptr<sf::Texture> edit_tex;
   sf::RoundedRectangleShape queue_background;
   sf::RoundedRectangleShape queue_background_shadow;
-  sf::RoundedRectangleShape search_background;
   bool search_placeholder_active;
   std::shared_ptr<sf::Texture> side_expand_tex;
   std::shared_ptr<sf::Texture> side_contract_tex;
@@ -387,7 +890,6 @@ struct StaticPlayerData {
   bool queue_half_expanded;
   std::shared_ptr<sf::Texture> live_full_tex;
   std::shared_ptr<sf::Texture> live_empty_tex;
-  std::shared_ptr<sf::Texture> cancel_queue_search_tex;
 
   StaticPlayerData() = default;
   ~StaticPlayerData() = default;
@@ -402,18 +904,13 @@ struct StaticPlayerData {
 };
 
 struct StaticPlaylistSelectorData {
-  sf::RoundedRectangleShape search_background;
-  sf::RoundedRectangleShape search_shadow;
-  sf::Text search_before_cursor;
-  sf::Text search_after_cursor;
-  std::shared_ptr<sf::Texture> cancel_search_tex;
-  sf::Sprite cancel_search;
+  std::shared_ptr<InputComponent> search;
   sf::RoundedRectangleShape control_corner;
   sf::RoundedRectangleShape control_corner_shadow;
   std::shared_ptr<sf::Texture> add_playlist_tex;
-  sf::Sprite add_playlist;
+  std::optional<sf::Sprite> add_playlist;
   std::shared_ptr<sf::Texture> playlist_play_tex;
-  sf::Sprite playlist_play;
+  std::optional<sf::Sprite> playlist_play;
   std::vector<std::string> playlists;
   DTCache drawables_cache;
 
@@ -437,8 +934,8 @@ struct MenuData {
 
   struct PlayerData {
     bool is_valid = false; // This has to be set to true to signify that the struct is ready to be used (all necessary fields are set)
-    std::unique_ptr<MusicPlayer> music = std::make_unique<MusicPlayer>();
-    std::unique_ptr<StaticPlayerData> data;
+    std::shared_ptr<MusicPlayer> music = std::make_shared<MusicPlayer>();
+    std::shared_ptr<StaticPlayerData> data;
     int song_id; // Needs to be set manually
     int playing_song_id = -1;
     bool seeking = false;
@@ -456,7 +953,7 @@ struct MenuData {
 
   struct PlaylistSelectorData {
     bool is_valid = false; // Same as PlayerData is_valid
-    std::unique_ptr<StaticPlaylistSelectorData> data;
+    std::shared_ptr<StaticPlaylistSelectorData> data;
     bool reset_cursor = true;
     bool search_active = false;
     sf::Vector2f playlist_play_pos;
@@ -466,32 +963,8 @@ struct MenuData {
     MenuData::PlayerData,
     MenuData::PlaylistSelectorData
   > data;
+
+  MenuData() : data(PlaylistSelectorData()) {} // Construct data with PlaylistSelectorData() just so that clang is happy
 };
-
-enum class AnimationStage {
-  start,
-  half,
-  end,
-};
-
-struct ClickEvent {
-  std::function<void(MenuData&)> function;
-  sf::FloatRect bounds;
-  sf::Mouse::Button mouse_button;
-  sf::View view;
-};
-
-extern std::vector<ClickEvent> click_events;
-extern std::vector<ClickEvent> search_res_click_events;
-void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, sf::View view = window.getDefaultView());
-
-struct ScrollEvent {
-  float& scroll_offset;
-  sf::FloatRect bounds;
-  bool& can_scroll;
-};
-
-extern std::vector<ScrollEvent> scroll_events;
-void new_scroll_event(std::vector<ScrollEvent>& container, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll);
 
 #endif

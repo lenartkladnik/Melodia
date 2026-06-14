@@ -6,17 +6,23 @@
 #include <thread>
 #include "../external/lib/RoundedRectangleShape.hpp"
 #include "include/data.hpp"
-#include "include/menus.hpp"
 #include "include/player_menu.hpp"
 #include "include/download.hpp"
 
-std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
+std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
+  reset_globals();
+
   float search_size_x = 600.f;
-  auto general = init_general(
+  auto search = std::make_shared<InputComponent>(
     window,
-    {search_size_x, 40.f},
-    {window_size.x / 2 - search_size_x / 2, 12.f}
+    "playlist_search_input_c", // id
+    sf::Vector2f{search_size_x, 40.f}, // size
+    sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f}, // position
+    "Search"
   );
+  // new_click_event(click_events, [](MenuData& menu_data) {
+  //   std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->clear_input();
+  // }, search.cancel_input_bounds(), sf::Mouse::Button::Left);
 
   // Playlist play overlay
   auto playlist_play_tex = std::make_shared<sf::Texture>();
@@ -50,27 +56,66 @@ std::unique_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   sf::Sprite add_playlist(*add_playlist_tex);
   add_playlist.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
+  // Popups
+
+  PopupComponent* add_playlist_popup = PopupComponent::Create("add_playlist");
+  add_playlist_popup->hidden = true;
+  add_playlist_popup->z_index = 1;
+
+  sf::RoundedRectangleShape add_playlist_background({600.f, 300.f}, 8, main_n);
+  add_playlist_background.setFillColor(background_color);
+  add_playlist_background.setPosition({
+    (window_size.x / 2) - (add_playlist_background.getGlobalBounds().size.x / 2),
+    (window_size.y / 2) - (add_playlist_background.getGlobalBounds().size.y / 2)
+  });
+
+  sf::Vector2f save_button_size = {90.f, 40.f};
+  auto save_button = std::make_shared<ButtonComponent>(
+    window,
+    "add_playlist_save_button", // id
+    "Create",
+    save_button_size, // size
+    sf::Vector2f{ // position
+      add_playlist_background.getPosition().x + add_playlist_background.getGlobalBounds().size.x - save_button_size.x - 10.f,
+      add_playlist_background.getPosition().y + add_playlist_background.getGlobalBounds().size.y - save_button_size.y - 10.f
+    },
+    [](MenuData& menu_data){
+      popup_components.at("add_playlist")->hidden = true;
+    }
+  );
+
+  auto title_input = std::make_shared<InputComponent>(
+    window,
+    "add_playlist_title_input_c", // id
+    sf::Vector2f{200.f, 38.f}, // size
+    sf::Vector2f{ // position
+      add_playlist_background.getPosition().x + 10.f,
+      add_playlist_background.getPosition().y + 10.f
+    },
+    "Title"
+  );
+
+  add_playlist_popup->new_input("title_input", title_input);
+  add_playlist_popup->new_button("save_button", save_button);
+  add_playlist_popup->new_rounded_rectangle_shape("background", std::move(add_playlist_background));
+
 
   auto playlists = get_all_playlists();
 
   DTCache drawables_cache;
 
-  return std::make_unique<StaticPlaylistSelectorData>(StaticPlaylistSelectorData {
-    general->search_background,
-    general->search_shadow,
-    general->search_before_cursor,
-    general->search_after_cursor,
-    general->cancel_search_tex,
-    general->cancel_search,
-    control_corner,
-    control_corner_shadow,
-    add_playlist_tex,
-    add_playlist,
-    playlist_play_tex,
-    playlist_play,
-    playlists,
-    drawables_cache,
-  });
+
+  auto data = std::make_shared<StaticPlaylistSelectorData>();
+  data->search = search;
+  data->control_corner = control_corner;
+  data->control_corner_shadow = control_corner_shadow;
+  data->add_playlist_tex = add_playlist_tex;
+  data->add_playlist = add_playlist;
+  data->playlist_play_tex = playlist_play_tex;
+  data->playlist_play = playlist_play;
+  data->playlists = playlists;
+  data->drawables_cache = drawables_cache;
+  return data;
 }
 
 bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window, MenuData& menu_data) {
@@ -86,13 +131,15 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   int max_playlists_per_line = (int)(window_size.x / total_playlist_sel_size);
   float padding_to_center = (window_size.x - (total_playlist_sel_size * max_playlists_per_line)) / 2;
 
+  // Playlist Items
+
   for (size_t i = 0; i < data.playlists.size(); i++) {
     sf::Vector2f cover_pos = {
       total_playlist_sel_size * (i % max_playlists_per_line) + padding_to_center + (cover_offset / 2),
       (selector_cover_size + selector_gap) * ((int)(i / max_playlists_per_line) + 1) + (cover_offset / 2)
     };
 
-    data.playlist_play.setPosition(cover_pos);
+    data.playlist_play->setPosition(cover_pos);
     if (data.drawables_cache.contains(i)) { // Only draw existing ones
 
       auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
@@ -105,20 +152,19 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       data.drawables_cache.draw(i, window);
 
-      new_click_event(click_events, [i](MenuData& menu_data) {
+      new_click_event(click_events, "playlist_play_" + std::to_string(i), [i](MenuData& menu_data) {
         switch_to_player(menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
-      }, data.playlist_play.getGlobalBounds(), sf::Mouse::Button::Left);
+      }, data.playlist_play->getGlobalBounds(), sf::Mouse::Button::Left);
 
       if (!pause_main_input_handling) {
         if (draw_playlist_play) {
-          window.draw(data.playlist_play);
+          window.draw(*data.playlist_play);
         }
 
         // Hover checks
 
-        if (
-          (data.playlist_play.getGlobalBounds().contains(mouse_pos) && draw_playlist_play)
-        ) {
+        // TODO: Figure out how to only change hover state when the obj has hidden false
+        if (data.playlist_play->getGlobalBounds().contains(mouse_pos) && draw_playlist_play) {
           window.setMouseCursor(hand_cursor);
 
           playlist_sel.reset_cursor = false;
@@ -149,7 +195,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     auto playlist_name = std::make_shared<sf::Text>(default_font, data.playlists[i]);
     playlist_name->setFillColor(text_color);
-    playlist_name->setCharacterSize(24);
+    setFontSize(*playlist_name, large_font_size);
     playlist_name->setPosition({
       sel_background->getPosition().x + selector_cover_size + 5.f,
       sel_background->getPosition().y + 10.f
@@ -157,7 +203,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     auto playlist_size = std::make_shared<sf::Text>(default_font, "Items: " + std::to_string(get_playlist(data.playlists[i]).size()));
     playlist_size->setFillColor(light_text_color);
-    playlist_size->setCharacterSize(18);
+    setFontSize(*playlist_size, small_font_size);
     playlist_size->setPosition({
       sel_background->getPosition().x + sel_background->getGlobalBounds().size.x - playlist_size->getGlobalBounds().size.x - 20.f,
       sel_background->getPosition().y + sel_background->getGlobalBounds().size.y - playlist_size->getGlobalBounds().size.y - 15.f
@@ -170,12 +216,15 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture});
   }
 
-  if (!search_string.empty()) {
+
+  // Search Results
+
+  if (playlist_sel.data->search->is_active()) {
     can_search_string_scroll = true;
 
-    if (prev_search_string.empty() || prev_search_string != search_string) {
-      search_results = search_all_songs(search_string);
-      prev_search_string = search_string;
+    if (playlist_sel.data->search->should_input_refresh()) {
+      search_results = search_all_songs(playlist_sel.data->search->get_input_string());
+      playlist_sel.data->search->input_refresh();
       search_res_click_events = {};
     }
 
@@ -185,13 +234,13 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     auto approx_leftover = search_results.empty() ? 5.f : 13.f;
     auto approx_dl_prompt_h = (approx_unit - 60.f);
     float search_results_background_h = std::min((approx_unit) * (search_results.size() + 1) - approx_leftover, (float)window_size.y - approx_unit - approx_dl_prompt_h);
-    sf::RoundedRectangleShape search_results_background({data.search_background.getGlobalBounds().size.x, search_results_background_h + approx_dl_prompt_h / 2}, 8, main_n);
-    search_results_background.setPosition({data.search_background.getPosition().x, data.search_background.getPosition().y + data.search_background.getGlobalBounds().size.y - 20.f});
+    sf::RoundedRectangleShape search_results_background({data.search->background_bounds().size.x, search_results_background_h + approx_dl_prompt_h / 2}, 8, main_n);
+    search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y - 20.f});
     search_results_background.setFillColor(dark_background_color);
 
     window.draw(search_results_background);
 
-    new_scroll_event(scroll_events, search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
+    new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
 
     // Show search results
 
@@ -239,7 +288,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       sf::Text search_res_title(default_font, get_song_title(search_res_id));
       search_res_title.setFillColor(title_color);
-      search_res_title.setCharacterSize(18);
+      setFontSize(search_res_title, small_font_size);
       search_res_title.setPosition({
         search_res_cover.getPosition().x + search_res_cover.getGlobalBounds().size.x + 15.f,
         search_res_cover.getPosition().y + queue_cover_size / 3 - 10.f
@@ -247,7 +296,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       sf::Text search_res_artist(default_font, get_song_artist(search_res_id));
       search_res_artist.setFillColor(artist_color);
-      search_res_artist.setCharacterSize(18);
+      setFontSize(search_res_artist, small_font_size);
       search_res_artist.setPosition({search_res_title.getPosition().x, search_res_title.getPosition().y + 20.f});
 
       sf::RoundedRectangleShape search_res_background({search_results_background.getGlobalBounds().size.x - 10.f, entry_h + 5.f}, 8, main_n);
@@ -256,7 +305,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       sf::Text search_res_more(default_font, "...");
       search_res_more.setFillColor(text_color);
-      search_res_more.setCharacterSize(18);
+      setFontSize(search_res_more, small_font_size);
       search_res_more.setPosition({
         search_res_background.getPosition().x + search_res_background.getGlobalBounds().size.x - search_res_more.getGlobalBounds().size.x - 20.f,
         (search_res_background.getPosition().y - 5.f) + (search_res_background.getGlobalBounds().size.y - 5.f) / 2 - search_res_more.getGlobalBounds().size.y
@@ -274,9 +323,9 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       search_res_more_bounds.position.y += 45.f - playlist_sel_scroll;
 
       if (search_results_background.getGlobalBounds().contains(search_res_more_bounds.position)) {
-        new_click_event(search_res_click_events, [search_res_id](MenuData& menu_data) {
+        new_click_event(search_res_click_events, "search_res_more_bounds", [search_res_id](MenuData& menu_data) {
           std::cout << "Edit " << search_res_id << std::endl;
-        }, search_res_more_bounds, sf::Mouse::Button::Left, search_results_view);
+        }, search_res_more_bounds, sf::Mouse::Button::Left, nullptr, search_results_view);
       }
 
       auto unit_size = search_res_background.getGlobalBounds().size.y + 13.5;
@@ -296,41 +345,43 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       search_results_background.getPosition().y + search_results_background.getGlobalBounds().size.y - download_prompt_background.getGlobalBounds().size.y - 5.f
     });
 
-    sf::Text download_prompt(default_font, "Download '" + search_string + "'");
+    sf::Text download_prompt(default_font, "Download '" + playlist_sel.data->search->get_input_string() + "'");
     download_prompt.setPosition({
       download_prompt_background.getPosition().x + 5.f,
       download_prompt_background.getPosition().y + download_prompt_background.getGlobalBounds().size.y / 2 - download_prompt.getGlobalBounds().size.y / 2
     });
-    download_prompt.setCharacterSize(18);
+    setFontSize(download_prompt, small_font_size);
     download_prompt.setFillColor(light_text_color);
 
     window.draw(download_prompt_background);
     window.draw(download_prompt);
 
-    new_click_event(search_res_click_events, [](MenuData& menu_data) {
-      download_song_thread = std::unique_ptr<std::thread>(new std::thread(download_song_from_query, search_string));
+    new_click_event(search_res_click_events, "download_prompt_background", [](MenuData& menu_data) {
+      download_song_thread = std::unique_ptr<std::thread>(new std::thread(
+        download_song_from_query,
+        std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->get_input_string()
+      ));
     }, download_prompt_background.getGlobalBounds(), sf::Mouse::Button::Left);
   }
   else {
     can_search_string_scroll = false;
-    window.draw(data.search_shadow);
+    data.search->draw_input_shadow();
   }
 
-  window.draw(data.search_background);
-  window.draw(data.search_before_cursor);
-  window.draw(data.search_after_cursor);
-  window.draw(data.cancel_search);
-  if (show_cursor) {
-    search_draw_cursor(window, data.search_before_cursor, data.search_background);
-  }
+  data.search->draw();
+
+  // Add Playlist
 
   window.draw(data.control_corner_shadow);
   window.draw(data.control_corner);
-  window.draw(data.add_playlist);
+  window.draw(*data.add_playlist);
 
-  new_click_event(click_events, [](MenuData& menu_data) {
-    std::cout << "TODO: New playlist" << std::endl;
-  }, data.add_playlist.getGlobalBounds(), sf::Mouse::Button::Left);
+  new_click_event(click_events, "add_playlist", [](MenuData& menu_data) {
+    popup_components.at("add_playlist")->hidden = false;
+  }, data.add_playlist->getGlobalBounds(), sf::Mouse::Button::Left);
+
+
+  // Popups / Overlays
 
   // Progress bar for downloading
   if (!progress_bar_string.empty()) {
@@ -342,7 +393,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     });
 
     sf::Text pbar_text(default_font, progress_bar_string);
-    pbar_text.setCharacterSize(20);
+    setFontSize(pbar_text, medium_font_size);
     pbar_text.setFillColor(text_color);
     pbar_text.setPosition({
       pbar_background.getPosition().x + 5.f,
@@ -350,7 +401,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     });
 
     sf::Text pbar_doing_text(default_font, progress_bar_doing_string);
-    pbar_doing_text.setCharacterSize(18);
+    setFontSize(pbar_doing_text, small_font_size);
     pbar_doing_text.setFillColor(light_text_color);
     pbar_doing_text.setPosition({
       pbar_background.getPosition().x + (pbar_background.getGlobalBounds().size.x / 2) - (pbar_doing_text.getGlobalBounds().size.x / 2),
@@ -374,6 +425,10 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     window.draw(pbar_progress_done);
   }
 
+  // Add new playlist
+  popup_components.at("add_playlist")->draw();
+
+
   window.display();
 
   return true;
@@ -383,10 +438,7 @@ void switch_to_playlist_selector(MenuData& menu_data, sf::RenderWindow& window) 
   menu_data.data = MenuData::PlaylistSelectorData();
   menu_data.type = MenuData::PlaylistSelector;
 
-  search_max_char = playlist_search_max_char;
-  search_results = {};
-  prev_search_string = "";
-  click_events = {};
+  input_max_char = playlist_search_max_char;
 
   std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window);
   std::get<MenuData::PlaylistSelector>(menu_data.data).is_valid = true;

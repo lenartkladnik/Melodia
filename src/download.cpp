@@ -9,26 +9,34 @@
 #endif
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 
-#include "stb/stb_image.h"
-#include "stb/stb_image_resize2.h"
-#include "stb/stb_image_write.h"
+#include "../external/lib/stb/stb_image.h"
+#include "../external/lib/stb/stb_image_resize2.h"
+#include "../external/lib/stb/stb_image_write.h"
 
-bool _download_song_data_from_query(int new_id, const std::string& query) {
-  auto yt_dlp_path = base_path_external_prog + "yt-dlp/";
+using json = nlohmann::json;
+
+bool _yt_dlp_download_song_from_query(int new_id, const std::string& query) {
   auto new_base = base_music_path_data + std::to_string(new_id);
-  auto yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
+  std::string yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
 
-  #ifdef __linux__
-  return system((yt_dlp_path + "yt-dlp_linux" + yt_dlp_args).c_str()) == 0;
-  #endif
+  std::string progs_path = "";
+  std::string dlp_path = "";
+
   #ifdef __MINGW32__
-  return system((yt_dlp_path + "yt-dlp.exe" + yt_dlp_args).c_str()) == 0;
-  #endif
-  #ifdef __APPLE__
-  return system((yt_dlp_path + "yt-dlp_macos" + yt_dlp_args).c_str()) == 0;
+  progs_path = ".\\external\\programs";
+  dlp_path = progs_path + "\\yt-dlp.exe";
+  #else
+  progs_path = "./external/programs";
+  dlp_path = progs_path + "/yt-dlp";
   #endif
 
-  return false;
+  std::cout << progs_path << "\n" << dlp_path << "\n" << yt_dlp_args << "\n";
+
+  std::string command = dlp_path + " --ffmpeg-location \"" + progs_path + "\"" + yt_dlp_args;
+
+  std::cout << "Calling system with '" << command << "'\n";
+
+  return system(command.c_str()) == 0;
 }
 
 bool _resize_cover_art(const std::string& temp_file_path, const std::string& output, int target_w, int target_h) {
@@ -236,16 +244,12 @@ bool download_song_from_query(const std::string& query) {
       max_id = id;
   }
 
-  if (max_id == -1) {
-    return false;
-  }
-
   auto new_id = max_id + 1;
 
   progress_bar_amount += 1.f; // Done with getting the max_id
 
   progress_bar_doing_string = "Downloading song file and metadata";
-  if (!_download_song_data_from_query(new_id, query)) return false;
+  if (!_yt_dlp_download_song_from_query(new_id, query)) return false;
   std::cout << "Info: Downloaded song file and metadata for query '" << query << "'." << std::endl;
   progress_bar_amount += 1.f; // Done with downloading song file and metadata from query
 
@@ -255,6 +259,49 @@ bool download_song_from_query(const std::string& query) {
   progress_bar_amount += 1.f; // Done with downloading song cover from query
 
   progress_bar_doing_string = "Done!";
+  progress_bar_string = "";
 
   return true;
+}
+
+bool _archive_org_download_song_from_query(int new_id, const std::string& title, const std::string& artist) { // Not viable - poor songs
+  std::cout << "Calling with t:" << title << ", a:" << artist << "\n";
+  auto base_url = "https://archive.org";
+  httplib::Client archive_org(base_url);
+
+  // Try the exact search with title and artist
+  auto accurate_search_path = "/advancedsearch.php?q=title:%22" + urlencode(title) + "%22%20AND%20creator:%22" + urlencode(artist) + "%22&output=json&rows=100";
+  auto accurate_res = archive_org.Get(accurate_search_path);
+
+  if (accurate_res && accurate_res->status == 200) {
+    json resp_data = json::parse(accurate_res->body)["response"];
+
+    if (resp_data["numFound"] > 0) {
+      auto match = resp_data["docs"][0];
+
+      auto idf = match["identifier"].dump();
+
+      auto files_path = "/download/" + idf.substr(1, idf.size() - 2);
+      std::cout << files_path << "\n";
+      auto files_res = archive_org.Get(files_path);
+
+      if (files_res && files_res->status == 200) {
+        std::cout << files_res->body << "\n";
+
+        return true;
+      }
+    }
+  }
+
+  // Try the more general search (title + artist in one search string)
+  auto simpler_search_path = "/advancedsearch.php?q=%22" + urlencode(title) + "%20" + urlencode(artist) + "%22&output=json&rows=100";
+  auto simpler_res = archive_org.Get(simpler_search_path);
+
+  if (simpler_res && simpler_res->status == 200) {
+    std::cout << simpler_res->body << "\n";
+
+    return true;
+  }
+
+  return false;
 }

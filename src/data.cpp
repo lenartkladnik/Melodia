@@ -12,6 +12,7 @@
 #include <memory>
 #include <stdexcept>
 #include <array>
+#include <unordered_map>
 #include <sys/stat.h>
 #include "include/data.hpp"
 
@@ -51,19 +52,25 @@ extern const float move_speed = 20.f;
 extern const float match_diff = 3.f;
 extern const int player_search_max_char = 28;
 extern const int playlist_search_max_char = 42;
-int search_max_char = 0;
+int input_max_char = 0;
 extern const int queue_max_char = 26;
 extern const float queue_contracted_width = 50.f;
 extern const float control_corner_gap = 15.f;
 extern const float scroll_speed = 25.f;
+
+extern const float font_multiplier = 1.8; // Multiply the font values (this exists purely for easier changing between fonts)
+extern const float small_font_size = (18 * font_multiplier);
+extern const float medium_font_size = (20 * font_multiplier);
+extern const float medium_2_font_size = (22 * font_multiplier);
+extern const float large_font_size = (24 * font_multiplier);
 
 extern const sf::Vector2u window_base_size({1920, 1080});
 sf::RenderWindow window(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, sf::State::Windowed);
 sf::Vector2f window_size = {static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)};
 sf::View default_view = window.getDefaultView();
 
-extern const sf::Color main_color({179, 126, 25});
-extern const sf::Color dark_main_color({156, 110, 22});
+extern const sf::Color main_color({232, 224, 209});
+extern const sf::Color dark_main_color({209, 204, 194});
 extern const sf::Color background_color({196, 186, 189});
 extern const sf::Color dark_background_color({156, 146, 149});
 extern const sf::Color background_shadow_color({176, 166, 169});
@@ -83,16 +90,16 @@ extern const sf::Cursor hand_cursor = sf::Cursor::createFromSystem(sf::Cursor::T
 
 sf::Font default_font;
 
-bool search_active = false;
-bool show_cursor = false;
-size_t cursor_pos = 0;
+// bool input_active = false;
+// size_t cursor_pos = 0;
 bool held_left_mb_down = false;
-bool reset_cursor = true;
-std::string search_string = "";
-std::string prev_search_string = "";
+// bool reset_cursor = true;
+// std::string input_string = "";
+// std::string prev_input_string = "";
 std::vector<int> search_results = {};
 std::string progress_bar_string = "";
 std::string progress_bar_doing_string = "";
+// std::string input_prompt = "";
 float progress_bar_amount = 0.f;
 float progress_bar_total = 0.f;
 std::unique_ptr<std::thread> download_song_thread;
@@ -103,7 +110,15 @@ bool can_search_string_scroll = false;
 std::vector<ClickEvent> click_events;
 std::vector<ClickEvent> search_res_click_events;
 
+std::vector<FocusEvent> focus_events;
+
 std::vector<ScrollEvent> scroll_events;
+
+std::vector<TextEvent> text_events;
+
+std::vector<KbEvent> kb_events;
+
+std::unordered_map<std::string, std::shared_ptr<PopupComponent>> popup_components;
 
 std::random_device rd;
 std::mt19937 rand_generator(rd());
@@ -120,7 +135,7 @@ std::string exec(const char* cmd) {
 
   std::array<char, 128> buffer;
   std::string result;
-  std::unique_ptr<FILE, decltype(&PCLOSE)> pipe(POPEN(cmd, "r"), PCLOSE);
+  std::unique_ptr<FILE, int(*)(FILE*)> pipe(POPEN(cmd, "r"), PCLOSE);
   if (!pipe) {
     throw std::runtime_error("popen() failed!");
   }
@@ -132,20 +147,34 @@ std::string exec(const char* cmd) {
 
 // ==============================================================================
 
-void new_click_event(std::vector<ClickEvent>& container, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, sf::View view) {
-  for (const auto& each : container) {
-    if (each.bounds == bounds) return;
-  }
-
-  container.push_back(ClickEvent{function, bounds, mouse_button, view});
+void new_click_event(std::vector<ClickEvent>& container, std::string id, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(ClickEvent{{std::move(id), bounds, view, component}, function, mouse_button});
 }
 
-void new_scroll_event(std::vector<ScrollEvent>& container, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll) {
-  for (const auto& each : container) {
-    if (each.bounds == bounds) return;
-  }
+void new_focus_event(std::vector<FocusEvent>& container, std::string id, std::function<void(MenuData&, sf::Vector2f&)> function, std::function<void(MenuData&)> else_function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(FocusEvent{{std::move(id), bounds, view, component}, function, else_function, mouse_button});
+}
 
-  container.push_back(ScrollEvent{scroll_offset, bounds, can_scroll});
+void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll, UIComponent* component) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(ScrollEvent{{std::move(id), bounds, {}, component}, scroll_offset, can_scroll});
+}
+
+void new_text_event(std::vector<TextEvent>& container, std::string id, InputComponent* input_component, UIComponent* component) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(TextEvent{{std::move(id), {}, {}, component}, input_component});
+}
+
+void new_kb_event(std::vector<KbEvent>& container, std::string id, UIComponent* component) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(KbEvent{{std::move(id), {}, {}, component}});
 }
 
 std::string construct_song_path(int id) {
@@ -191,7 +220,8 @@ std::vector<std::string> get_all_playlists() {
     // First check that the path doesn't contain a dot, because the playlist files don't
     // have an extension. Then check that the path is a file and not a directory.
     if (path.filename().string().find(".") == std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
-      playlists.push_back(path.stem().u8string());
+      auto u8 = path.stem().u8string();
+      playlists.push_back(std::string(reinterpret_cast<const char*>(u8.c_str())));
     }
   }
 
@@ -350,12 +380,13 @@ std::vector<int> search_all_songs(const std::string& query) {
     auto path = entry.path();
     auto str_path = path.string();
 
-    // First check that the path contains the .mp3 extensions, since it is one of the
+    // First check that the path contains the .title extensions, since it is one of the
     // extensions every song has. Then check that the path is a file and not a directory.
-    if (path.filename().string().find(".mp3") != std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
+    if (path.filename().string().find(".title") != std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
       int id = -1;
       try {
-        id = std::stoi(path.stem().u8string());
+        auto u8 = path.stem().u8string();
+        id = std::stoi(std::string(reinterpret_cast<const char*>(u8.c_str())));
       } catch (const std::invalid_argument& e) {
         std::cerr << e.what() << std::endl;
       } catch (const std::out_of_range& e) {
@@ -376,4 +407,49 @@ std::vector<int> search_all_songs(const std::string& query) {
   }
 
   return results;
+}
+
+float getFontOffsetPixels(float target_size) {
+  // This maps approximately what the results of font.getLineSpacing(*_font_size) for the
+  // Inter font at certain font sizes would be. (Because that font looks normal in the UI)
+
+  // This is a linear function fitted for these points:
+  // (32.4, 21.5)
+  // (36.0, 23.5)
+  // (39.6, 26.5)
+  // (43.2, 28.5)
+  auto normal_line_spacing = 0.666667f * target_size - 0.2;
+
+  return default_font.getLineSpacing(target_size) - normal_line_spacing;
+}
+
+void setFontSize(sf::Text& text, float target_size, unsigned int raster_mul) {
+  auto raster_size = target_size * raster_mul;
+  float scale = 1.0f / raster_mul;
+
+  text.setCharacterSize((unsigned int)raster_size);
+  text.setScale({scale, scale});
+
+  auto offset = getFontOffsetPixels(target_size);
+  text.setOrigin({0, offset});
+}
+
+void reset_globals() {
+  // All of the std::vector objects that get cleared here contain
+  // some pointers to objects in memory that has changed
+
+  search_res_click_events.clear();
+  search_results.clear();
+
+  click_events.clear();
+
+  popup_components.clear();
+
+  text_events.clear();
+
+  kb_events.clear();
+
+  focus_events.clear();
+
+  scroll_events.clear();
 }

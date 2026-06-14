@@ -1,19 +1,23 @@
 import subprocess
 import os.path
+import shutil
+import pathlib
 
 build = ARGUMENTS.get("build", "release")
 target = ARGUMENTS.get("target", "all")
+main_path = ARGUMENTS.get("main", "main.cpp")
+version = ARGUMENTS.get("version", "latest")
 
 project_name = "Melodia"
-cpp_standard = "17"
+cpp_standard = "20"
 sfml_dir = "external/build/SFML"
+temp_dist_dir = "dist/temp"
 build_jobs = 4
 use_system_sfml = (target == "linux")
 
 sources = [
-    "src/main.cpp",
+    f"src/{main_path}",
     "src/data.cpp",
-    "src/menus.cpp",
     "src/player_menu.cpp",
     "src/playlist_selector_menu.cpp",
     "src/animation.cpp",
@@ -24,7 +28,7 @@ sources = [
 base = Environment(
     CPPPATH=["include", "external/lib"],
     CPPDEFINES=["CPPHTTPLIB_OPENSSL_SUPPORT"],
-    CXXFLAGS=[f"-std=c++{cpp_standard}"],
+    CXXFLAGS=[f"-std=c++{cpp_standard}", "-fdiagnostics-color"],
     LIBS=["libssl", "libcrypto"],
 )
 
@@ -36,14 +40,71 @@ no_extras_in_build = [
     "-DBUILD_TESTING=OFF"
 ]
 
+def create_dist(target, archive_dist: bool):
+    dist_path = target[0][1]
+    target_path = pathlib.Path(temp_dist_dir)
+    platform = target[0][0]
+    bin_ext = ".exe" if platform == "windows" else ""
+    archive_ext = "gztar" if platform == "linux" else "zip"
+
+    os.makedirs(target_path, exist_ok=True)
+
+    print(f"Creating archive for {platform} ({version})")
+
+    def copy_prog(prog_name):
+        os.makedirs(pathlib.Path(target_path, "external/programs"), exist_ok=True)
+        shutil.copy(f"external/prog/{prog_name}/{prog_name}_{platform}", pathlib.Path(target_path, pathlib.Path(f"external/programs/{prog_name}{bin_ext}")))
+
+    copy_prog("yt-dlp")
+    copy_prog("ffmpeg")
+    copy_prog("ffprobe")
+
+    shutil.copytree("misc", pathlib.Path(target_path, "misc"))
+
+    os.makedirs(pathlib.Path(target_path, ".music_data/data"))
+    os.makedirs(pathlib.Path(target_path, ".music_data/playlists"))
+
+    if archive_dist:
+        archive_stem = dist_path + f"/Melodia-{platform}-{version}"
+        archive_path = f"{archive_stem}.{archive_ext.replace('gztar', 'tar.gz')}"
+
+        if os.path.exists(archive_path):
+            os.remove(archive_path)
+
+        shutil.make_archive(archive_stem, archive_ext, target_path)
+
+        shutil.rmtree(target_path)
+
+    else:
+        dir_path = pathlib.Path(dist_path, version)
+        os.makedirs(dir_path, exist_ok=True)
+
+        for item in pathlib.Path(target_path).glob("*"):
+            if os.path.exists(str(pathlib.Path(dir_path, item.name))) and item.name != ".music_data":
+                try:
+                    shutil.rmtree(str(pathlib.Path(dir_path, item.name)))
+                except NotADirectoryError:
+                    os.remove(str(pathlib.Path(dir_path, item.name)))
+
+            if item.name != ".music_data" or not os.path.exists(str(pathlib.Path(dir_path, item.name))):
+                shutil.move(str(item), str(pathlib.Path(dir_path, item.name)))
+
+    shutil.rmtree(target_path)
+
 def build_target(env, platform):
     build_dir = f"build/{platform}"
 
     VariantDir(build_dir, ".", duplicate=0)
 
-    return env.Program(
-        target=f"{out_dir}/{platform}/{project_name + '.exe' if platform == 'windows' else project_name}",
-        source=[f"{build_dir}/{src}" for src in sources],
+    return (
+        [
+            platform,
+            f"{out_dir}/{platform}"
+        ],
+        env.Program(
+            target=f"{temp_dist_dir}/{project_name + ".exe" if platform == "windows" else project_name}",
+            source=[f"{build_dir}/{src}" for src in sources],
+        )
     )
 
 def ensure_sfml_repo():
@@ -145,10 +206,10 @@ if "debug" in build: # Same as debug-l0
         "-Wextra"
     ])
 
-    out_dir = "bin/debug"
+    out_dir = "dist/debug"
 else:
     base.Append(CXXFLAGS=["-O2"])
-    out_dir = "bin/release"
+    out_dir = "dist/release"
 
 if build == "debug-l1":
     base.Append(CXXFLAGS=[
@@ -166,7 +227,7 @@ if build == "debug-l1":
 targets = []
 
 if target in ("all", "linux"):
-    print("Building Linux")
+    print("Building for Linux")
 
     env = base.Clone()
 
@@ -176,7 +237,7 @@ if target in ("all", "linux"):
     targets.append(prog)
 
 if target in ("all", "windows"):
-    print("Building Windows")
+    print("Building for Windows")
 
     ensure_sfml_repo()
 
@@ -328,7 +389,7 @@ if target in ("all", "windows"):
     targets.append(prog)
 
 if target in ("all", "macos"):
-    print("Building macOS")
+    print("Building for macOS")
 
     ensure_sfml_repo()
 
@@ -356,4 +417,8 @@ if target in ("all", "macos"):
     prog = build_target(env, "macos")
     targets.append(prog)
 
-Default(targets)
+def post_build(*args, **kwargs):
+    for target in targets:
+        create_dist(target, not "debug" in build)
+
+Default(base.Command("post_build", [x[1] for x in targets], post_build))
