@@ -1,1 +1,0 @@
-external/prog/* filter=lfs diff=lfs merge=lfs -text
