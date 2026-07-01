@@ -1,4 +1,6 @@
 #include <fstream>
+#include <iostream>
+#include <filesystem>
 #include "../external/lib/httplib.h"
 #include "../external/lib/nlohmann/json.hpp"
 #include "include/data.hpp"
@@ -15,24 +17,70 @@
 
 using json = nlohmann::json;
 
-bool _yt_dlp_download_song_from_query(int new_id, const std::string& query) {
+bool _download_file(std::string url, const std::string& out_path, int max_redirects = 5) {
+  for (int i = 0; i < max_redirects; i++) {
+    auto path_start = url.find('/', url.find("://") + 3);
+    std::string host = url.substr(0, path_start);
+    std::string path = url.substr(path_start);
+
+    httplib::Client cli(host);
+    cli.set_follow_location(true);
+    cli.set_connection_timeout(10);
+    cli.set_read_timeout(30);
+
+    auto res = cli.Get(path);
+
+    if (!res) {
+      // Request failed TODO: Add std::cerr
+      return false;
+    }
+
+    if (res->status == 301 || res->status == 302 || res->status == 307 || res->status == 308) {
+      auto new_location = res->get_header_value("location");
+      url = new_location;
+      continue;
+    }
+
+    if (res->status != 200) {
+      // Failed to download
+      return false;
+    }
+
+    std::ofstream out(out_path, std::ios::binary);
+    if (!out) return false;
+    out.write(res->body.data(), res->body.size());
+
+    return true;
+  }
+}
+
+inline std::string get_yt_dlp_download_url() {
+#ifdef _WIN32
+    return "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+#elif __APPLE__
+    return "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+#elif __linux__
+    #ifdef __aarch64__
+        return "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64";
+    #else
+        return "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+    #endif
+#endif
+}
+
+inline std::string get_yt_dlp_downloaded_path() {
+#ifdef _WIN32
+  return ".\\external\\programs\\yt-dlp.exe";
+#else
+  return "./external/programs/yt-dlp";
+#endif
+}
+
+bool _yt_dlp_download_song_from_query(const std::string& dlp_path, int new_id, const std::string& query) {
   auto new_base = base_music_path_data + std::to_string(new_id);
-  std::string yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
+  std::string yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --no-playlist --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
 
-  std::string progs_path = "";
-  std::string dlp_path = "";
-
-  #ifdef __MINGW32__
-  progs_path = ".\\external\\programs";
-  dlp_path = progs_path + "\\yt-dlp.exe";
-  #else
-  progs_path = "./external/programs";
-  dlp_path = progs_path + "/yt-dlp";
-  #endif
-
-  std::cout << progs_path << "\n" << dlp_path << "\n" << yt_dlp_args << "\n";
-
-  std::string command = dlp_path + " --ffmpeg-location \"" + progs_path + "\"" + yt_dlp_args;
+  std::string command = dlp_path + yt_dlp_args; // dlp_path + " --ffmpeg-location \"" + progs_path + "\"" + yt_dlp_args;
 
   std::cout << "Calling system with '" << command << "'\n";
 
@@ -47,7 +95,7 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
   unsigned char* data = stbi_load(temp_file_path.c_str(), &w, &h, &channels, 0);
 
   if (!data) {
-    std::cerr << "Error: Failed to decode image from " << temp_file_path << std::endl;
+    std::cerr << "Error: Failed to decode image from " << temp_file_path << ": " << stbi_failure_reason() << "\n";
     return false;
   }
 
@@ -60,7 +108,7 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
     case 3: layout = STBIR_RGB; break;
     case 4: layout = STBIR_RGBA; break;
     default:
-      std::cerr << "Error: Unsupported channel count for cover art image." << std::endl;
+      std::cerr << "Error: Unsupported channel count for cover art image.\n";
       stbi_image_free(data);
       return false;
   }
@@ -78,14 +126,14 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
   progress_bar_amount += 1.f; // Done resizing the cover art image
 
   if (!stbi_write_png(output.c_str(), target_w, target_h, channels, resized.data(), target_w * channels)) {
-    std::cerr << "Error: Failed to write cover art image." << std::endl;
+    std::cerr << "Error: Failed to write cover art image.\n";
     stbi_image_free(data);
     return false;
   }
 
   stbi_image_free(data);
 
-  std::cout << "Info: Resized cover art image" << std::endl;
+  std::cout << "Info: Resized cover art image\n";
   progress_bar_amount += 1.f; // Done writing cover art image
 
   return true;
@@ -147,7 +195,7 @@ bool _download_cover_art(int new_id) {
 
   progress_bar_doing_string = "Connecting to '" + main_base_url + "'";
 
-  std::cout << "[download.cpp] Results page: '" + main_base_url + query + "'" << std::endl;
+  std::cout << "[download.cpp] Results page: '" + main_base_url + query + "'\n";
 
   httplib::Client cli(main_base_url);
   auto res = cli.Get(query);
@@ -186,7 +234,7 @@ bool _download_cover_art(int new_id) {
 
   progress_bar_doing_string = "Connecting to '" + image_base_url + "'";
 
-  std::cout << "[download.cpp] Cover art: '" + image_base_url + cover_art_path + "'" << std::endl;
+  std::cout << "[download.cpp] Cover art: '" + image_base_url + cover_art_path + "'\n";
 
   httplib::Client img_dl_cli(image_base_url);
   auto img_dl_res = img_dl_cli.Get(cover_art_path);
@@ -197,7 +245,7 @@ bool _download_cover_art(int new_id) {
     std::ofstream temp_file(temp_file_path, std::ios::binary);
 
     if (!temp_file) {
-      std::cerr << "Error: Failed to write temporary cover art image." << std::endl;
+      std::cerr << "Error: Failed to write temporary cover art image.\n";
       return false;
     }
 
@@ -223,7 +271,31 @@ bool download_song_from_query(const std::string& query) {
 
   pause_main_input_handling = true;
 
-  std::cout << "Info: Attempting to download song from query '" << query << "'." << std::endl;
+  std::cout << "Info: Checking if yt-dlp already exists on the system\n";
+
+  std::string yt_dlp_path = "yt-dlp";
+  if (!std::filesystem::exists(get_yt_dlp_downloaded_path()) &&
+      !std::system("yt-dlp --version >"
+    #ifdef _WIN32
+      "nul 2>nul"
+    #else
+      "/dev/null 2>&1"
+    #endif
+    ) == 0) {
+    std::cout << "Info: yt-dlp was not found on the system and will be downloaded.\n";
+
+    yt_dlp_path = get_yt_dlp_downloaded_path();
+    if (!_download_file(get_yt_dlp_download_url(), yt_dlp_path)) {
+      std::cerr << "Error: Failed to download the yt-dlp binary form '" << yt_dlp_path << "'. Consider installing yt-dlp yourself systemwide.\n";
+      return false;
+    }
+    #ifndef _WIN32
+    // On POSIX like systems also chmod +x the file
+    system(("chmod +x " + yt_dlp_path).c_str());
+    #endif
+  }
+
+  std::cout << "Info: Attempting to download song from query '" << query << "'.\n";
 
   // Set progress bar
   progress_bar_string = "Downloading...";
@@ -249,16 +321,16 @@ bool download_song_from_query(const std::string& query) {
   progress_bar_amount += 1.f; // Done with getting the max_id
 
   progress_bar_doing_string = "Downloading song file and metadata";
-  if (!_yt_dlp_download_song_from_query(new_id, query)) return false;
-  std::cout << "Info: Downloaded song file and metadata for query '" << query << "'." << std::endl;
+  if (!_yt_dlp_download_song_from_query(yt_dlp_path, new_id, query)) return false;
+  std::cout << "Info: Downloaded song file and metadata for query '" << query << "'.\n";
   progress_bar_amount += 1.f; // Done with downloading song file and metadata from query
 
   progress_bar_doing_string = "Downloading song cover";
   if (!_download_cover_art(new_id)) return false;
-  std::cout << "Info: Downloaded song cover art for id '" << new_id << "'." << std::endl;
+  std::cout << "Info: Downloaded song cover art for id '" << new_id << "'.\n";
   progress_bar_amount += 1.f; // Done with downloading song cover from query
 
-  progress_bar_doing_string = "Done!";
+  progress_bar_doing_string = "";
   progress_bar_string = "";
 
   return true;

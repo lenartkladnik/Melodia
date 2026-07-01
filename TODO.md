@@ -70,6 +70,8 @@
 - gracefully handle exceptions
 - create some sort of installer
 - download yt-dlp binary instead of storing it
+- refactor download.cpp into more files (eg.: postprocess.cpp)
+- make helper.cpp / resources.cpp
 
 # building
 - add BUILDING.md

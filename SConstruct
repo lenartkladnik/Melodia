@@ -44,20 +44,21 @@ def create_dist(target, archive_dist: bool):
     dist_path = target[0][1]
     target_path = pathlib.Path(temp_dist_dir)
     platform = target[0][0]
-    bin_ext = ".exe" if platform == "windows" else ""
+    # bin_ext = ".exe" if platform == "windows" else ""
     archive_ext = "gztar" if platform == "linux" else "zip"
 
     os.makedirs(target_path, exist_ok=True)
 
     print(f"Creating archive for {platform} ({version})")
 
-    def copy_prog(prog_name):
-        os.makedirs(pathlib.Path(target_path, "external/programs"), exist_ok=True)
-        shutil.copy(f"external/prog/{prog_name}/{prog_name}_{platform}", pathlib.Path(target_path, pathlib.Path(f"external/programs/{prog_name}{bin_ext}")))
+    os.makedirs(pathlib.Path(target_path, "external/programs"), exist_ok=True) # yt-dlp will be downloaded into here at runtime
 
-    copy_prog("yt-dlp")
-    copy_prog("ffmpeg")
-    copy_prog("ffprobe")
+    # def copy_prog(prog_name):
+    #     shutil.copy(f"external/prog/{prog_name}/{prog_name}_{platform}", pathlib.Path(target_path, pathlib.Path(f"external/programs/{prog_name}{bin_ext}")))
+
+    # copy_prog("yt-dlp")
+    # copy_prog("ffmpeg")
+    # copy_prog("ffprobe")
 
     shutil.copytree("misc", pathlib.Path(target_path, "misc"))
 

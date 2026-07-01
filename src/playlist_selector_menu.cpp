@@ -358,8 +358,15 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     new_click_event(search_res_click_events, "download_prompt_background", [](MenuData& menu_data) {
       download_song_thread = std::unique_ptr<std::thread>(new std::thread(
-        download_song_from_query,
-        std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->get_input_string()
+        [=](){
+          int code = download_song_from_query(std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->get_input_string());
+          std::cout << code << "\n";
+
+          pause_main_input_handling = false;
+
+          auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
+          playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
+        }
       ));
     }, download_prompt_background.getGlobalBounds(), sf::Mouse::Button::Left);
   }

@@ -6,22 +6,17 @@ function _build_template() {
     if [ "$1" != "-n" ] && [ "$1" != "--no-execute" ]; then
       cd dist/debug/linux/$4
       if [ ! -z "$1" ]; then
-        $@ ./Melodia
-        cd ../../../..
+        $1 ./Melodia
       else
         ./Melodia
-        cd ../../../..
       fi
+      cd ../../../..
     fi
   fi
 }
 
 function build_debug() {
   _build_template "$1" "linux" "debug" "dev-build" "main.cpp"
-}
-
-function build_download_dummy() {
-  _build_template "--no-execute" "linux" "debug" "download-dummy-build" "download_dummy.cpp"
 }
 
 alias build_all="scons"

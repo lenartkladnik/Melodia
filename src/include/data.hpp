@@ -424,6 +424,7 @@ class InputComponent : public UIComponent {
     bool show_cursor = false;
     bool reset_cursor_flag = false;
     bool input_active = false;
+    bool focused = false;
     sf::Clock cursor_clock;
     std::string prev_input_string = "";
     std::string input_prompt;
@@ -511,7 +512,13 @@ class InputComponent : public UIComponent {
       }
     }
 
+    bool is_focused() {
+      return focused;
+    }
+
     void focus(sf::Vector2f& pos) {
+      this->focused = true;
+
       input_before_cursor.setFillColor(text_color);
       if (input_active) { // Set cursor pos
         if (input_string.empty()) {
@@ -540,6 +547,8 @@ class InputComponent : public UIComponent {
     }
 
     void unfocus() {
+      this->focused = false;
+
       input_active = false;
       show_cursor = false;
 

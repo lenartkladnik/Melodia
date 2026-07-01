@@ -131,9 +131,9 @@ int main(int argc, char *argv[]) {
           switch_to_playlist_selector(menu_data, window);
 
           break;
+          }
         }
       }
-    }
 
       if (!pause_main_input_handling) {
         on<sf::Event::MouseWheelScrolled>(*event, scroll_events,
@@ -155,165 +155,77 @@ int main(int argc, char *argv[]) {
         );
 
         on<sf::Event::TextEntered>(*event, text_events,
-          [&](const auto* e, const auto& item) { return item.input_component->is_active() && !item.input_component->hidden; },
+          [&](const auto* e, const auto& item) { return item.input_component->is_active() && !item.input_component->hidden && item.input_component->is_focused(); },
           [&](const auto* e, const auto* item) { item->input_component->write_input(e->unicode); }
         );
 
-        // Update all text
+        // Update all input components so they display any new text
         for (const auto& each : text_events) {
           if (each.input_component->is_active() && !each.input_component->hidden) {
             each.input_component->update();
           }
         }
+      }
 
-        // Menu specific events
-        switch (menu_data.type) {
-          case (MenuData::Player): {
-            if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
-              std::cerr << "Error: MenuData, should be of type Player" << std::endl;
-              return 1;
-            }
-
-            auto& player = std::get<MenuData::PlayerData>(menu_data.data);
-
-            // if (input_active) {
-            //   if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-            //     player.data->search->move_cursor_left();
-            //   }
-            //   else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-            //     player.data->search->move_cursor_right();
-            //   }
-            // } else {
-              // Keyboard controls (turned off when input_active)
-
-            //   if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
-            //     if (keyPressed->scancode == sf::Keyboard::Scancode::Space) {
-            //       player.music->toggle_play_state();
-            //     }
-            //   }
-            // }
-
-            // if (const auto* text = event->getIf<Event::TextEntered>()) {
-            //   if (input_active) {
-            //     auto input = text->unicode;
-
-            //     player.data->search->write_input(input);
-            //   }
-            // }
-
-            // if (mouseButtonPressed) {
-            //   auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
-
-            // TODO:  if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-            //          if (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) {
-            //            switch_to_playlist_selector(menu_data, window);
-            //            break;
-            //          }
-
-
-                // ----------
-                // All inputs for the queue are handled in the player_menu.cpp file where the queue is generated on the fly
-                // ----------
-
-                // Actions that require focusing an element
-
-                // if (player.data->search->background_bounds().contains(pos)) { // Search is active
-                //   player.data->search->focus(pos);
-                // }
-                // else { // Clicked anywhere else
-                //   player.data->search->unfocus();
-                // }
-              // }
-            // }
-
-          break;
+      // Menu specific events
+      switch (menu_data.type) {
+        case (MenuData::Player): {
+          if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
+            std::cerr << "Error: MenuData, should be of type Player" << std::endl;
+            return 1;
           }
 
-          case (MenuData::PlaylistSelector): {
-            if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
-              std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
-              return 1;
-            }
+          auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
-            auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
+        break;
+        }
 
-            playlist_sel.reset_cursor = true;
+        case (MenuData::PlaylistSelector): {
+          if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
+            std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
+            return 1;
+          }
 
-            // Progress bar
-            if (!progress_bar_string.empty()) {
-              if (progress_bar_amount == progress_bar_total) {
-                download_song_thread->join();
-                pause_main_input_handling = false;
-                playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
-                progress_bar_string = ""; // Reset so that the .empty check above succeeds
-              }
-            }
+          auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
-            // if (input_active) {
-            //   if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) {
-            //     playlist_sel.data->search->move_cursor_left();
-            //   }
-            //   else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) {
-            //     playlist_sel.data->search->move_cursor_right();
-            //  }
-            // }
+          playlist_sel.reset_cursor = true;
 
-            // if (const auto* text = event->getIf<Event::TextEntered>()) {
-            //   if (input_active) {
-            //     auto input = text->unicode;
+          const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
+          if (mouseWheelScrolled) {
+            if (playlist_sel.data->search->not_empty())
+              search_res_click_events.clear();
+          }
 
-            //     playlist_sel.data->search->write_input(input);
-            //   }
-            // }
+          const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>();
+          if (mouseButtonPressed) {
+            auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
 
-            const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
-            if (mouseWheelScrolled) {
-              if (playlist_sel.data->search->not_empty())
-                search_res_click_events.clear();
-            }
-
-            const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>();
-            if (mouseButtonPressed) {
-              auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
-
-              if (playlist_sel.data->search->not_empty()) {
-                for (const auto& each : search_res_click_events) {
-                  if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
-                    each.function(menu_data);
-                  }
+            if (playlist_sel.data->search->not_empty()) {
+              for (const auto& each : search_res_click_events) {
+                if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
+                  each.function(menu_data);
                 }
               }
-
-              // if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
-                // Unfocusing requires detection of clicks on the whole
-                // screen so I have not gotten around to implementing it in
-                // a click event
-
-              //   if (playlist_sel.data->search->background_bounds().contains(pos)) { // Search is active
-              //     playlist_sel.data->search->focus(pos);
-              //   }
-              //   else { // Clicked anywhere else
-              //     playlist_sel.data->search->unfocus();
-              //   }
-              // }
             }
-
-          break;
           }
-          default:
-            std::cerr << "Error: Invalid menu selected." << std::endl;
-            switch_to_playlist_selector(menu_data, window);
 
-          break;
+        break;
+        }
+
+        default: {
+          std::cerr << "Error: Invalid menu selected." << std::endl;
+          switch_to_playlist_selector(menu_data, window);
+
+        break;
         }
       }
-    } // end while for event handling
+    } // end while for event processing
 
     switch (menu_data.type) {
       case (MenuData::Player): {
         if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
-            std::cerr << "Error: MenuData, should be of type Player" << std::endl;
-            return 1;
+          std::cerr << "Error: MenuData, should be of type Player" << std::endl;
+          return 1;
         }
 
         auto& player = std::get<MenuData::PlayerData>(menu_data.data);
