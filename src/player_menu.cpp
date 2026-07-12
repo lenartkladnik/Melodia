@@ -8,6 +8,7 @@
 #include "include/data.hpp"
 #include "include/animation.hpp"
 #include "include/playlist_selector_menu.hpp"
+#include "include/utils.hpp"
 
 std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist) {
   reset_globals();
@@ -21,11 +22,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   sf::RoundedRectangleShape cover({cover_size, cover_size}, 8, main_n);
 
-  auto cover_texture = std::make_shared<sf::Texture>();
-  if (!cover_texture->loadFromFile(song_path + ".png")) {
-    std::cerr << "Error: Failed to load '" << song_path << ".png" << "'." << std::endl;
-  }
-  cover_texture->setSmooth(true);
+  auto cover_texture = load_texture(song_path + ".png");
 
   cover.setTexture(cover_texture.get());
   cover.setPosition({half - cover.getGlobalBounds().size.x / 2, padding_top});
@@ -60,37 +57,20 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   // Player controls
 
-  auto play_tex = std::make_shared<sf::Texture>();
-  if (!play_tex->loadFromFile(base_path_misc + "play.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "play.png'." << std::endl;
-  }
-  play_tex->setSmooth(true);
-
-  auto pause_tex = std::make_shared<sf::Texture>();
-  if (!pause_tex->loadFromFile(base_path_misc + "pause.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "pause.png'." << std::endl;
-  }
-  pause_tex->setSmooth(true);
+  auto play_tex = load_texture("play.png");
+  auto pause_tex = load_texture("pause.png");
 
   // Play / pause button
   sf::Sprite main_control(*play_tex);
   main_control.setPosition({(float)(half - main_control.getGlobalBounds().size.x / 2), padding_top + cover_size + offset + 60.f});
 
-  auto next_tex = std::make_shared<sf::Texture>();
-  if (!next_tex->loadFromFile(base_path_misc + "next.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "next.png'." << std::endl;
-  }
-  next_tex->setSmooth(true);
+  auto next_tex = load_texture("next.png");
 
   // Skip to next song button
   sf::Sprite next_control(*next_tex);
   next_control.setPosition({main_control.getPosition().x + 40.f, main_control.getPosition().y});
 
-  auto previous_tex = std::make_shared<sf::Texture>();
-  if (!previous_tex->loadFromFile(base_path_misc + "previous.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "previous.png'." << std::endl;
-  }
-  previous_tex->setSmooth(true);
+  auto previous_tex = load_texture("previous.png");
 
   // Skip to previous song button
   sf::Sprite previous_control(*previous_tex);
@@ -120,31 +100,16 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   progress_shadow.setPosition({progress.getPosition().x + 5.f, progress.getPosition().y + 5.f});
   progress_shadow.setFillColor(background_shadow_color);
 
-  auto live_empty_tex = std::make_shared<sf::Texture>();
-  if (!live_empty_tex->loadFromFile(base_path_misc + "live_empty.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "live_empty.png'." << std::endl;
-  }
-
-  auto live_full_tex = std::make_shared<sf::Texture>();
-  if (!live_full_tex->loadFromFile(base_path_misc + "live_full.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "live_full.png'." << std::endl;
-  }
+  auto live_empty_tex = load_texture("live_empty.png");
+  auto live_full_tex = load_texture("live_full.png");
 
   // Live mode button
   sf::Sprite live(*live_empty_tex);
   live.setPosition({progress.getPosition().x + progress.getGlobalBounds().size.x - live.getGlobalBounds().size.x, main_control.getPosition().y});
 
-  auto volume_tex = std::make_shared<sf::Texture>();
-  if (!volume_tex->loadFromFile(base_path_misc + "volume.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "volume.png'." << std::endl;
-  }
-  volume_tex->setSmooth(true);
+  auto volume_tex = load_texture("volume.png");
 
-  auto mute_tex = std::make_shared<sf::Texture>();
-  if (!mute_tex->loadFromFile(base_path_misc + "mute.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "mute.png'." << std::endl;
-  }
-  mute_tex->setSmooth(true);
+  auto mute_tex = load_texture("mute.png");
 
   // Volume slider and icon next to the volume slider
   sf::Sprite vol_icon(*volume_tex);
@@ -180,43 +145,22 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   queue_background_shadow.setPosition({queue_background.getPosition().x + shadow_offset, queue_background.getPosition().y + shadow_offset});
   queue_background_shadow.setFillColor(dark_main_color);
 
-  auto side_expand_tex = std::make_shared<sf::Texture>();
-  if (!side_expand_tex->loadFromFile(base_path_misc + "side_expand.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "side_expand.png'." << std::endl;
-  }
-  side_expand_tex->setSmooth(true);
+  auto side_expand_tex = load_texture("side_expand.png");
 
-  auto side_contract_tex = std::make_shared<sf::Texture>();
-  if (!side_contract_tex->loadFromFile(base_path_misc + "side_contract.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "side_contract.png'." << std::endl;
-  }
-  side_contract_tex->setSmooth(true);
+  auto side_contract_tex = load_texture("side_contract.png");
 
   sf::Sprite queue_toggle(*side_expand_tex);
   queue_toggle.setPosition({0.f, queue_background.getPosition().y + 6.f});
 
   // Items in the control corner
 
-  auto favorite_empty_tex = std::make_shared<sf::Texture>();
-  if (!favorite_empty_tex->loadFromFile(base_path_misc + "favorite_empty.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "favorite_empty.png'." << std::endl;
-  }
-  favorite_empty_tex->setSmooth(true);
-
-  auto favorite_full_tex = std::make_shared<sf::Texture>();
-  if (!favorite_full_tex->loadFromFile(base_path_misc + "favorite_full.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "favorite_full.png'." << std::endl;
-  }
-  favorite_full_tex->setSmooth(true);
+  auto favorite_empty_tex = load_texture("favorite_empty.png");
+  auto favorite_full_tex = load_texture("favorite_full.png");
 
   sf::Sprite favorite(*favorite_empty_tex);
   favorite.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
-  auto manage_playlist_tex = std::make_shared<sf::Texture>();
-  if (!manage_playlist_tex->loadFromFile(base_path_misc + "manage_playlist.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "manage_playlist.png'." << std::endl;
-  }
-  manage_playlist_tex->setSmooth(true);
+  auto manage_playlist_tex = load_texture("manage_playlist.png");
 
   sf::Sprite manage_playlist(*manage_playlist_tex);
   manage_playlist.setPosition({favorite.getPosition().x + favorite.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
@@ -224,20 +168,12 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   sf::Sprite playlist_selector(*manage_playlist_tex);
   playlist_selector.setPosition({queue_toggle.getPosition().x + 8.f, queue_toggle.getPosition().y + queue_toggle.getGlobalBounds().size.y + 6.f});
 
-  auto trash_tex = std::make_shared<sf::Texture>();
-  if (!trash_tex->loadFromFile(base_path_misc + "trash.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "trash.png'." << std::endl;
-  }
-  trash_tex->setSmooth(true);
+  auto trash_tex = load_texture("trash.png");
 
   sf::Sprite trash(*trash_tex);
   trash.setPosition({manage_playlist.getPosition().x + manage_playlist.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
-  auto edit_tex = std::make_shared<sf::Texture>();
-  if (!edit_tex->loadFromFile(base_path_misc + "edit.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "edit.png'." << std::endl;
-  }
-  edit_tex->setSmooth(true);
+  auto edit_tex = load_texture("edit.png");
 
   sf::Sprite edit(*edit_tex);
   edit.setPosition({trash.getPosition().x + trash.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
@@ -257,7 +193,9 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     "player_search_input_c", // id
     sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f}, // size
     sf::Vector2f{50.f, queue_background.getPosition().y + 10.f}, // position
-    "Search"
+    "Search",
+    nullptr,
+    [](InputComponent*, MenuData&){}
   );
 
   // new_click_event(click_events, [](MenuData& menu_data) {
@@ -464,6 +402,8 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 }
 
 void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
+  global_z_index = 0;
+
   auto& player_data = *player.data;
   auto& music = player.music;
 
@@ -568,11 +508,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
     sf::RoundedRectangleShape now_playing_bar({queue_entry_background.getGlobalBounds().size.x - 12.f, 4.f}, 2, main_n);
     now_playing_bar.setFillColor(main_color);
 
-    sf::Texture queue_play_tex;
-    if (!queue_play_tex.loadFromFile(base_path_misc + "queue_play.png")) {
-      std::cerr << "Error: Failed to load '" << base_path_misc << "queue_play.png'." << std::endl;
-    }
-    queue_play_tex.setSmooth(true);
+    sf::Texture queue_play_tex = *load_texture("queue_play.png");
 
     sf::Sprite queue_play(queue_play_tex);
 

@@ -4,8 +4,8 @@
 #include <SFML/Window/Event.hpp>
 #include <limits>
 
-template<typename TEvent, typename TContainer, typename TPredicate, typename THandler>
-void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle) {
+template<typename TEvent, typename TContainer, typename TPredicate, typename THandler, typename THandlerElse>
+void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle, THandlerElse handle_else) {
   const auto* e = event.getIf<TEvent>();
   if (!e) return;
 
@@ -15,7 +15,7 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   for (const auto& item : items) {
     if (item.bounds.contains(window.mapPixelToCoords(e->position, item.view)) && predicate(e, item)) {
       if (item.component) {
-        if (!item.component->hidden && item.component->z_index > max_z_index) {
+        if (!item.component->is_hidden() && (item.component->z_index > max_z_index)) {
           max_z_index = item.component->z_index;
           best_item = &item;
         }
@@ -29,8 +29,14 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
     }
   }
 
-  if (best_item)
-    handle(e, best_item);
+  // handle best item and unfocus all other items
+  for (const auto& item : items) {
+    if (&item == best_item)
+      handle(e, best_item);
+
+    else
+      handle_else(e, &item);
+  }
 }
 
 template<typename TEvent, typename TContainer, typename TPredicate, typename THandler>
@@ -40,7 +46,7 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   if (!e) return;
   for (const auto& item : items) {
     if (item.component) {
-      if (!item.component->hidden && predicate(e, item))
+      if (!item.component->is_hidden() && predicate(e, item))
         handle(e, &item);
     } else if (predicate(e, item)) {
       handle(e, &item);

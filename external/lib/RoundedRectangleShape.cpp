@@ -31,7 +31,8 @@ namespace sf
 RoundedRectangleShape::RoundedRectangleShape(const Vector2f& size, float radius, unsigned int cornerPointCount)
 {
     mySize = size;
-    myRadius = radius;
+    for (int i = 0; i < 4; ++i)
+      myRadii[i] = radius;
     myCornerPointCount = cornerPointCount;
     update();
 }
@@ -49,17 +50,24 @@ const Vector2f& RoundedRectangleShape::getSize() const
     return mySize;
 }
 
-////////////////////////////////////////////////////////////
-void RoundedRectangleShape::setCornersRadius(float radius)
+void RoundedRectangleShape::setCornerRadii(std::array<float, 4> radii)
 {
-    myRadius = radius;
+    myRadii = radii;
     update();
 }
 
 ////////////////////////////////////////////////////////////
-float RoundedRectangleShape::getCornersRadius() const
+void RoundedRectangleShape::setCornersRadius(float radius)
 {
-    return myRadius;
+    for (int i = 0; i < 4; ++i)
+      myRadii[i] = radius;
+    update();
+}
+
+////////////////////////////////////////////////////////////
+float RoundedRectangleShape::getCornersRadius(size_t index) const
+{
+    return myRadii[index];
 }
 
 ////////////////////////////////////////////////////////////
@@ -85,6 +93,8 @@ sf::Vector2f RoundedRectangleShape::getPoint(std::size_t index) const
     sf::Vector2f center;
     unsigned int centerIndex = index/myCornerPointCount;
     static const float pi = 3.141592654f;
+
+    float myRadius = myRadii[centerIndex];
 
     switch(centerIndex)
     {

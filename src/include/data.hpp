@@ -57,17 +57,22 @@ extern sf::RenderWindow window;
 extern sf::Vector2f window_size;
 extern sf::View default_view;
 
+extern int global_z_index;
+
 extern const sf::Color main_color;
 extern const sf::Color dark_main_color;
 extern const sf::Color background_color;
 extern const sf::Color dark_background_color;
+extern const sf::Color light_background_color;
 extern const sf::Color background_shadow_color;
 extern const sf::Color dark_background_shadow_color;
 extern const sf::Color background_shadow_color_transparent;
 extern const sf::Color dark_background_shadow_color_transparent;
 extern const sf::Color progress_color;
 extern const sf::Color text_color;
+extern const sf::Color cursor_color;
 extern const sf::Color light_text_color;
+extern const sf::Color lighter_text_color;
 extern const sf::Color white_color;
 extern const sf::Color title_color;
 extern const sf::Color artist_color;
@@ -92,8 +97,12 @@ extern float progress_bar_amount;
 extern float progress_bar_total;
 extern std::unique_ptr<std::thread> download_song_thread;
 extern bool pause_main_input_handling;
+extern float playlist_search_entry_height;
+extern float playlist_search_entry_unit;
+extern float playlist_search_scroll_lower_bound;
 extern float playlist_sel_scroll;
 extern bool can_search_string_scroll;
+extern bool search_was_active;
 
 class PopupComponent;
 extern std::unordered_map<std::string, std::shared_ptr<PopupComponent>> popup_components;
@@ -130,7 +139,7 @@ class MenuData; // Forward declare MenuData so ClickEvent can use it
 struct UIEvent {
   std::string id;
   sf::FloatRect bounds;
-  sf::View view;
+  sf::View view = default_view;
   UIComponent* component = nullptr;
 };
 
@@ -148,7 +157,7 @@ void new_click_event(
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,
-  sf::View view = window.getDefaultView()
+  sf::View view = default_view
 );
 
 struct FocusEvent : UIEvent {
@@ -166,7 +175,7 @@ void new_focus_event(
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,
-  sf::View view = window.getDefaultView()
+  sf::View view = default_view
 );
 
 struct ScrollEvent : UIEvent {
@@ -175,7 +184,14 @@ struct ScrollEvent : UIEvent {
 };
 
 extern std::vector<ScrollEvent> scroll_events;
-void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll, UIComponent* component = nullptr);
+void new_scroll_event(
+  std::vector<ScrollEvent>& container,
+  std::string id,
+  sf::FloatRect bounds,
+  float& scroll_offset,
+  bool& can_scroll,
+  UIComponent* component = nullptr
+);
 
 class InputComponent; // Forward declare InputComponent so TextEvent can use it
 
@@ -405,13 +421,45 @@ class MusicPlayer {
 class UIComponent {
   public:
     std::string id;
-    bool hidden;
     int z_index;
+    bool m_hidden = false;
+    bool m_focused = false;
 
-    virtual void draw() = 0;
+    virtual void draw() {};
 
-    UIComponent(std::string id, bool hidden = false, int z_index = 0)
-      : id(std::move(id)), hidden(hidden), z_index(z_index) {}
+    virtual void focus() {
+      m_focused = true;
+    }
+
+    virtual void unfocus() {
+      m_focused = false;
+    }
+
+    virtual bool is_focused() {
+      return m_focused;
+    }
+
+    virtual void hide() {
+      m_hidden = true;
+    }
+
+    virtual void show() {
+      m_hidden = false;
+    }
+
+    virtual bool is_hidden() {
+      return m_hidden;
+    }
+
+    UIComponent(std::string id, bool hidden = false)
+      : id(std::move(id))
+    {
+      z_index = global_z_index;
+      global_z_index++;
+
+      if (hidden)
+        this->hide();
+    }
 
     virtual ~UIComponent() = default;
 };
@@ -424,7 +472,7 @@ class InputComponent : public UIComponent {
     bool show_cursor = false;
     bool reset_cursor_flag = false;
     bool input_active = false;
-    bool focused = false;
+    bool refresh_input_flag = true;
     sf::Clock cursor_clock;
     std::string prev_input_string = "";
     std::string input_prompt;
@@ -432,28 +480,17 @@ class InputComponent : public UIComponent {
     sf::RoundedRectangleShape input_shadow;
     sf::Text input_before_cursor;
     sf::Text input_after_cursor;
-    std::shared_ptr<sf::Texture> cancel_input_tex;
-    sf::Sprite cancel_input;
-
-    static std::shared_ptr<sf::Texture> load_cancel_texture() {
-      static std::shared_ptr<sf::Texture> tex;
-      if (!tex) {
-        tex = std::make_shared<sf::Texture>();
-        if (!tex->loadFromFile(base_path_misc + "close.png")) {
-            std::cerr << "Error: Failed to load cancel texture." << std::endl;
-        }
-        tex->setSmooth(true);
-      }
-      return tex;
-    }
+    std::shared_ptr<sf::Texture> action_button_tex;
+    std::optional<sf::Sprite> action_button;
 
   public:
     void draw() override {
-      if (!this->hidden) {
+      if (!this->is_hidden()) {
         window.draw(input_background);
         window.draw(input_before_cursor);
         window.draw(input_after_cursor);
-        window.draw(cancel_input);
+        if (action_button)
+          window.draw(*action_button);
         if (show_cursor)
           this->draw_cursor();
       }
@@ -512,15 +549,12 @@ class InputComponent : public UIComponent {
       }
     }
 
-    bool is_focused() {
-      return focused;
-    }
-
-    void focus(sf::Vector2f& pos) {
-      this->focused = true;
+    void focus(const sf::Vector2f& pos) {
+      this->m_focused = true;
 
       input_before_cursor.setFillColor(text_color);
-      if (input_active) { // Set cursor pos
+
+      if (input_active) {
         if (input_string.empty()) {
           cursor_pos = 0;
         }
@@ -547,7 +581,7 @@ class InputComponent : public UIComponent {
     }
 
     void unfocus() {
-      this->focused = false;
+      this->m_focused = false;
 
       input_active = false;
       show_cursor = false;
@@ -568,15 +602,16 @@ class InputComponent : public UIComponent {
     }
 
     bool should_input_refresh() {
-      return prev_input_string.empty() || prev_input_string != input_string;
+      return refresh_input_flag || prev_input_string != input_string;
     }
 
     void force_input_refresh() {
-      prev_input_string = ""; // This will trigger at least the prev_input_string.empty() requirement for a refresh
+      refresh_input_flag = true;
     }
 
     void input_refresh() {
       prev_input_string = input_string;
+      refresh_input_flag = false;
     }
 
     void clear_input() {
@@ -591,12 +626,12 @@ class InputComponent : public UIComponent {
     void draw_cursor() {
       sf::RectangleShape cursor({1.2, input_background.getGlobalBounds().size.y - 15.f});
       cursor.setPosition({input_before_cursor.getPosition().x + 2.f + input_before_cursor.getGlobalBounds().size.x, input_before_cursor.getPosition().y + 1.f});
-      cursor.setFillColor(white_color);
+      cursor.setFillColor(cursor_color);
       window.draw(cursor);
     }
 
     void draw_input_shadow() {
-      window.draw(input_shadow);
+      // window.draw(input_shadow);
     }
 
     sf::FloatRect background_bounds() {
@@ -607,8 +642,33 @@ class InputComponent : public UIComponent {
       return input_background.getPosition();
     }
 
-    sf::FloatRect cancel_input_bounds() {
-      return cancel_input.getGlobalBounds();
+    float background_get_corner_radius(size_t index) {
+      return input_background.getCornersRadius(index);
+    }
+
+    void background_set_corner_radii(std::array<float, 4> radii) {
+      input_background.setCornerRadii(radii);
+    }
+
+    void background_reset_corner_radii() {
+      input_background.setCornersRadius(20);
+    }
+
+    sf::FloatRect action_button_bounds() {
+      if (action_button)
+        return action_button->getGlobalBounds();
+
+      sf::FloatRect dummy_rect;
+      dummy_rect.position = sf::Vector2f(0, 0);
+      dummy_rect.size = sf::Vector2f(0, 0);
+      return dummy_rect;
+    }
+
+    void register_action(std::function<void(InputComponent*, MenuData&)> action_function) {
+      if (action_button)
+        new_click_event(click_events, id, [action_function, this](MenuData& menu_data) {
+          action_function(this, menu_data);
+        }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
     }
 
     InputComponent(
@@ -617,26 +677,30 @@ class InputComponent : public UIComponent {
       sf::Vector2f input_size,
       sf::Vector2f input_pos,
       std::string prompt,
-      bool hidden = false,
-      int z_index = 0
+      std::shared_ptr<sf::Texture> action_tex,
+      std::function<void(InputComponent*, MenuData&)> action_function,
+      bool hidden = false
     )
-      : UIComponent(id, hidden, z_index),
+      : UIComponent(id, hidden),
         window(render_window),
         input_prompt(prompt),
         input_before_cursor(default_font, prompt, 20),
-        input_after_cursor(default_font, "", 20),
-        cancel_input_tex(load_cancel_texture()),
-        cancel_input(*cancel_input_tex)
+        input_after_cursor(default_font, "", 20)
 
     {
+      if (action_tex) {
+        action_button_tex = action_tex;
+        action_button.emplace(*action_button_tex);
+      }
+
       input_string = "";
       cursor_pos = 0;
 
       input_background.setSize(input_size);
-      input_background.setCornersRadius(20);
       input_background.setCornerPointCount(main_n);
       input_background.setPosition(input_pos);
-      input_background.setFillColor(dark_background_color);
+      input_background.setFillColor(light_background_color);
+      background_reset_corner_radii();
 
       input_shadow.setSize({input_background.getGlobalBounds().size.x + 5.f, input_background.getGlobalBounds().size.y + 5.f});
       input_shadow.setCornersRadius(20);
@@ -646,31 +710,28 @@ class InputComponent : public UIComponent {
 
       input_before_cursor.setFillColor(light_text_color);
       setFontSize(input_before_cursor, medium_font_size);
-      input_before_cursor.setPosition({input_background.getPosition().x + 10.f, input_background.getPosition().y + 6.f});
-
+      input_before_cursor.setPosition({input_background.getPosition().x + 16.f, input_background.getPosition().y + 5.f}); // + 6.f});
 
       input_after_cursor.setFillColor(text_color);
       setFontSize(input_after_cursor, medium_font_size);
       input_after_cursor.setPosition(input_before_cursor.getPosition());
 
+      if (action_button) {
+        action_button->setPosition({
+          input_background.getPosition().x + input_background.getGlobalBounds().size.x - action_button->getGlobalBounds().size.x - 12.f,
+          input_background.getPosition().y + 5.f
+        });
 
-      cancel_input.setPosition({
-        input_background.getPosition().x + input_background.getGlobalBounds().size.x - cancel_input.getGlobalBounds().size.x - 14.f,
-        input_background.getPosition().y + 9.f
-      });
-
-      new_click_event(click_events, id, [this](MenuData& menu_data) {
-        if (!this->hidden)
-          this->clear_input();
-      }, cancel_input.getGlobalBounds(), sf::Mouse::Button::Left, this);
+        register_action(action_function);
+      }
 
       new_focus_event(focus_events, id,
         [this](MenuData& menu_data, sf::Vector2f pos) {
-          if (!this->hidden)
+          if (!this->is_hidden())
             this->focus(pos);
         },
         [this](MenuData& menu_data) {
-          if (!this->hidden)
+          if (!this->is_hidden())
             this->unfocus();
         },
         input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
@@ -703,7 +764,7 @@ class ButtonComponent : public UIComponent {
 
   public:
     void draw() override {
-      if (!this->hidden) {
+      if (!this->is_hidden()) {
         window.draw(button_shape);
         window.draw(button_text);
       }
@@ -724,12 +785,11 @@ class ButtonComponent : public UIComponent {
       sf::Vector2f pos,
       std::function<void(MenuData&)> function,
       bool hidden = false,
-      int z_index = 0,
       sf::Color button_shape_color = dark_background_color,
       sf::Color button_text_color = text_color,
       int corner_radius = 10
     )
-      : UIComponent(id, hidden, z_index),
+      : UIComponent(id, hidden),
         window(render_window),
         button_text(default_font, text, 0),
         function(function)
@@ -751,7 +811,7 @@ class ButtonComponent : public UIComponent {
         button_shape.getPosition().y + button_shape.getGlobalBounds().size.y / 2 - button_text.getGlobalBounds().size.y
       });
 
-      new_click_event(click_events, id, [this, function](MenuData& menu_data) { if (!this->hidden) function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
+      new_click_event(click_events, id, [this, function](MenuData& menu_data) { if (!this->is_hidden()) function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
     }
 
     ~ButtonComponent() = default;
@@ -773,21 +833,35 @@ class PopupComponent : public UIComponent {
 
   public:
     void draw() override {
-      if (!this->hidden) {
+      if (!this->is_hidden()) {
         draw_rounded_rectangle_shapes();
         draw_input_components();
         draw_button_components();
       }
     }
 
+    std::shared_ptr<InputComponent> get_input(std::string id) {
+      for (auto it = input_components.begin(); it != input_components.end(); it++) {
+        if (it->first == id)
+          return it->second;
+      }
+
+      return nullptr;
+    }
+
+    std::shared_ptr<ButtonComponent> get_button(std::string id) {
+      for (auto it = button_components.begin(); it != button_components.end(); it++) {
+        if (it->first == id)
+          return it->second;
+      }
+
+      return nullptr;
+    }
+
     void new_input(std::string input_id, std::shared_ptr<InputComponent> input_component) {
       input_component->z_index += this->z_index;
 
       input_components.insert({input_id, input_component});
-
-      new_click_event(click_events, input_id, [this, input_id](MenuData& menu_data) {
-        popup_components.at(id)->get_input(input_id)->clear_input();
-      }, popup_components.at(id)->get_input(input_id)->cancel_input_bounds(), sf::Mouse::Button::Left, this);
     }
 
     void new_button(std::string id, std::shared_ptr<ButtonComponent> button_component) {
@@ -798,14 +872,6 @@ class PopupComponent : public UIComponent {
 
     void new_rounded_rectangle_shape(std::string id, sf::RoundedRectangleShape rounded_rectangle_shape) {
       rounded_rectangle_shapes.insert({id, rounded_rectangle_shape});
-    }
-
-    std::shared_ptr<InputComponent> get_input(std::string input_id) {
-      return input_components.at(input_id);
-    }
-
-    std::shared_ptr<ButtonComponent> get_button(std::string button_id) {
-      return button_components.at(button_id);
     }
 
     void draw_input_components() {
@@ -823,6 +889,30 @@ class PopupComponent : public UIComponent {
     void draw_rounded_rectangle_shapes() {
       for (auto it = rounded_rectangle_shapes.begin(); it != rounded_rectangle_shapes.end(); it++) {
         window.draw(it->second);
+      }
+    }
+
+    void hide() override {
+      m_hidden = true;
+
+      for (auto it = input_components.begin(); it != input_components.end(); it++) {
+        it->second->hide();
+      }
+
+      for (auto it = button_components.begin(); it != button_components.end(); it++) {
+        it->second->hide();
+      }
+    }
+
+    void show() override {
+      m_hidden = false;
+
+      for (auto it = input_components.begin(); it != input_components.end(); it++) {
+        it->second->show();
+      }
+
+      for (auto it = button_components.begin(); it != button_components.end(); it++) {
+        it->second->show();
       }
     }
 
@@ -847,6 +937,26 @@ class PopupComponent : public UIComponent {
   // Allow move
   PopupComponent(PopupComponent&&) = default;
   PopupComponent& operator=(PopupComponent&&) = default;
+};
+
+class AreaComponent : public UIComponent {
+  private:
+    sf::FloatRect m_bounds;
+
+  public:
+    AreaComponent(
+      std::string id,
+      sf::FloatRect bounds,
+      std::function<void(MenuData&)> function,
+      bool permanent = true
+    )
+      : UIComponent(id),
+      m_bounds(bounds)
+    {
+      new_click_event(click_events, id, function, m_bounds, sf::Mouse::Button::Left, permanent ? this : nullptr);
+    }
+
+    ~AreaComponent() = default;
 };
 
 struct StaticPlayerData {

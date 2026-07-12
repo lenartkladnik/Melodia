@@ -138,12 +138,19 @@ int main(int argc, char *argv[]) {
       if (!pause_main_input_handling) {
         on<sf::Event::MouseWheelScrolled>(*event, scroll_events,
           [&](const auto* e, const auto& item) { return item.can_scroll; },
-          [&](const auto* e, const auto* item) { item->scroll_offset -= e->delta * scroll_speed; }
+          [&](const auto* e, const auto* item) { item->scroll_offset -= e->delta * scroll_speed; },
+          [](const auto*, const auto*){}
         );
 
         on<sf::Event::MouseButtonPressed>(*event, click_events,
           [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
-          [&](const auto* e, const auto* item) { item->function(menu_data); }
+          [&](const auto* e, const auto* item) {
+            item->function(menu_data);
+          },
+          [&](const auto* e, const auto* item) {
+            if (item->component)
+              item->component->unfocus();
+          }
         );
 
         on<sf::Event::MouseButtonPressed>(*event, focus_events,
@@ -151,20 +158,14 @@ int main(int argc, char *argv[]) {
           [&](const auto* e, const auto* item) {
             auto pos = window.mapPixelToCoords(e->position, item->view);
             item->function(menu_data, pos);
-          }
+          },
+          [](const auto*, const auto*){}
         );
 
         on<sf::Event::TextEntered>(*event, text_events,
-          [&](const auto* e, const auto& item) { return item.input_component->is_active() && !item.input_component->hidden && item.input_component->is_focused(); },
+          [&](const auto* e, const auto& item) { return item.input_component->is_active() && !item.input_component->is_hidden() && item.input_component->is_focused(); },
           [&](const auto* e, const auto* item) { item->input_component->write_input(e->unicode); }
         );
-
-        // Update all input components so they display any new text
-        for (const auto& each : text_events) {
-          if (each.input_component->is_active() && !each.input_component->hidden) {
-            each.input_component->update();
-          }
-        }
       }
 
       // Menu specific events
@@ -190,22 +191,20 @@ int main(int argc, char *argv[]) {
 
           playlist_sel.reset_cursor = true;
 
-          const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
-          if (mouseWheelScrolled) {
-            if (playlist_sel.data->search->not_empty())
-              search_res_click_events.clear();
+          if (playlist_sel.data->search->is_focused()) {
+            on<sf::Event::MouseButtonPressed>(*event, search_res_click_events,
+              [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
+              [&](const auto* e, const auto* item) {
+                item->function(menu_data);
+              },
+              [&](const auto* e, const auto* item) {}
+            );
           }
 
-          const auto* mouseButtonPressed = event->getIf<sf::Event::MouseButtonPressed>();
-          if (mouseButtonPressed) {
-            auto pos = window.mapPixelToCoords(mouseButtonPressed->position);
-
-            if (playlist_sel.data->search->not_empty()) {
-              for (const auto& each : search_res_click_events) {
-                if ((each.mouse_button == mouseButtonPressed->button) && each.bounds.contains(pos)) {
-                  each.function(menu_data);
-                }
-              }
+          const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>();
+          if (mouseWheelScrolled) {
+            if (playlist_sel.data->search->is_focused()) {
+              search_res_click_events.clear();
             }
           }
 
@@ -220,6 +219,13 @@ int main(int argc, char *argv[]) {
         }
       }
     } // end while for event processing
+
+    // Update all input components so they can blink their cursors and display any new text
+    for (const auto& each : text_events) {
+      if (each.input_component->is_active() && !each.input_component->is_hidden()) {
+        each.input_component->update();
+      }
+    }
 
     switch (menu_data.type) {
       case (MenuData::Player): {
@@ -310,7 +316,7 @@ int main(int argc, char *argv[]) {
             player.data->vol_icon->getGlobalBounds().contains(pos) ||
             player.data->vol_slider.getGlobalBounds().contains(pos) ||
             player.data->live->getGlobalBounds().contains(pos) ||
-            player.data->search->cancel_input_bounds().contains(pos) ||
+            player.data->search->action_button_bounds().contains(pos) ||
             (player.data->playlist_selector->getGlobalBounds().contains(pos) && !player.data->queue_expanded) ||
             !player.reset_cursor
           ) {
@@ -342,13 +348,13 @@ int main(int argc, char *argv[]) {
         // Hover effects
 
         // TODO: Figure out how to only change hover state when the obj has hidden false
-        if (playlist_sel.data->search->background_bounds().contains(pos) && !playlist_sel.data->search->cancel_input_bounds().contains(pos)) {
+        if (playlist_sel.data->search->background_bounds().contains(pos) && !playlist_sel.data->search->action_button_bounds().contains(pos)) {
           window.setMouseCursor(text_cursor);
           playlist_sel.reset_cursor = false;
         }
         else if (
             playlist_sel.data->add_playlist->getGlobalBounds().contains(pos) ||
-            playlist_sel.data->search->cancel_input_bounds().contains(pos) ||
+            playlist_sel.data->search->action_button_bounds().contains(pos) ||
             !playlist_sel.reset_cursor
           ) {
 

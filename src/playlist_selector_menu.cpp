@@ -8,9 +8,12 @@
 #include "include/data.hpp"
 #include "include/player_menu.hpp"
 #include "include/download.hpp"
+#include "include/utils.hpp"
 
 std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
   reset_globals();
+
+  auto trash_input_c_tex = load_texture("download.png");
 
   float search_size_x = 600.f;
   auto search = std::make_shared<InputComponent>(
@@ -18,18 +21,13 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
     "playlist_search_input_c", // id
     sf::Vector2f{search_size_x, 40.f}, // size
     sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f}, // position
-    "Search"
+    "Search",
+    trash_input_c_tex,
+    [](InputComponent* input_c, MenuData& menu_data){}
   );
-  // new_click_event(click_events, [](MenuData& menu_data) {
-  //   std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->clear_input();
-  // }, search.cancel_input_bounds(), sf::Mouse::Button::Left);
 
   // Playlist play overlay
-  auto playlist_play_tex = std::make_shared<sf::Texture>();
-  if (!playlist_play_tex->loadFromFile(base_path_misc + "queue_play.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "queue_play.png'." << std::endl;
-  }
-  playlist_play_tex->setSmooth(true);
+  auto playlist_play_tex = load_texture("queue_play.png");
 
   sf::Sprite playlist_play(*playlist_play_tex);
   auto playlist_play_scale = (selector_cover_size - 10.f) / playlist_play.getGlobalBounds().size.x;
@@ -47,11 +45,7 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
 
   // Items in the control corner
 
-  auto add_playlist_tex = std::make_shared<sf::Texture>();
-  if (!add_playlist_tex->loadFromFile(base_path_misc + "plus.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "plus.png'." << std::endl;
-  }
-  add_playlist_tex->setSmooth(true);
+  auto add_playlist_tex = load_texture("plus.png");
 
   sf::Sprite add_playlist(*add_playlist_tex);
   add_playlist.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});
@@ -59,11 +53,10 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   // Popups
 
   PopupComponent* add_playlist_popup = PopupComponent::Create("add_playlist");
-  add_playlist_popup->hidden = true;
   add_playlist_popup->z_index = 1;
 
   sf::RoundedRectangleShape add_playlist_background({600.f, 300.f}, 8, main_n);
-  add_playlist_background.setFillColor(background_color);
+  add_playlist_background.setFillColor(light_background_color);
   add_playlist_background.setPosition({
     (window_size.x / 2) - (add_playlist_background.getGlobalBounds().size.x / 2),
     (window_size.y / 2) - (add_playlist_background.getGlobalBounds().size.y / 2)
@@ -80,7 +73,8 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
       add_playlist_background.getPosition().y + add_playlist_background.getGlobalBounds().size.y - save_button_size.y - 10.f
     },
     [](MenuData& menu_data){
-      popup_components.at("add_playlist")->hidden = true;
+      std::cout << "Create playlist\n";
+      popup_components.at("add_playlist")->hide();
     }
   );
 
@@ -92,12 +86,16 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
       add_playlist_background.getPosition().x + 10.f,
       add_playlist_background.getPosition().y + 10.f
     },
-    "Title"
+    "Title",
+    nullptr,
+    [](InputComponent*, MenuData&){}
   );
 
   add_playlist_popup->new_input("title_input", title_input);
   add_playlist_popup->new_button("save_button", save_button);
   add_playlist_popup->new_rounded_rectangle_shape("background", std::move(add_playlist_background));
+
+  add_playlist_popup->hide(); // Hide when all the components have been added to the popup since hiding the popup propagates and hides them as well
 
 
   auto playlists = get_all_playlists();
@@ -119,9 +117,16 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
 }
 
 bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window, MenuData& menu_data) {
+  global_z_index = 0;
+
   auto& data = *playlist_sel.data;
 
   window.clear(main_color);
+
+  // TEMPORARY - show a song
+
+
+  // Favourites
 
   // Playlists
 
@@ -219,42 +224,60 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
   // Search Results
 
-  if (playlist_sel.data->search->is_active()) {
+  if (playlist_sel.data->search->is_active() && playlist_sel.data->search->is_focused()) {
+    search_was_active = true;
+
+    playlist_sel.data->search->background_set_corner_radii(std::array<float, 4>{
+      playlist_sel.data->search->background_get_corner_radius(0),
+      playlist_sel.data->search->background_get_corner_radius(1),
+      0.f,
+      0.f
+    });
+
     can_search_string_scroll = true;
 
     if (playlist_sel.data->search->should_input_refresh()) {
       search_results = search_all_songs(playlist_sel.data->search->get_input_string());
       playlist_sel.data->search->input_refresh();
-      search_res_click_events = {};
+      search_res_click_events.clear();
     }
 
-    auto entry_h = queue_cover_size + 10.f;
+    float search_results_background_h = std::min((playlist_search_entry_unit) * (search_results.size()), (float)window_size.y - playlist_search_entry_unit);
+    sf::RoundedRectangleShape search_results_background({data.search->background_bounds().size.x, search_results_background_h + 10.f}, 8, main_n);
+    search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y});
+    search_results_background.setFillColor(light_background_color);
+    search_results_background.setCornerRadii(std::array<float, 4>{0.f, 0.f, search_results_background.getCornersRadius(2), search_results_background.getCornersRadius(3)});
 
-    auto approx_unit = entry_h + 10.f;
-    auto approx_leftover = search_results.empty() ? 5.f : 13.f;
-    auto approx_dl_prompt_h = (approx_unit - 60.f);
-    float search_results_background_h = std::min((approx_unit) * (search_results.size() + 1) - approx_leftover, (float)window_size.y - approx_unit - approx_dl_prompt_h);
-    sf::RoundedRectangleShape search_results_background({data.search->background_bounds().size.x, search_results_background_h + approx_dl_prompt_h / 2}, 8, main_n);
-    search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y - 20.f});
-    search_results_background.setFillColor(dark_background_color);
-
-    window.draw(search_results_background);
+    AreaComponent search_res_area(
+      "search_res_area",
+      search_results_background.getGlobalBounds(),
+      [](MenuData& menu_data){
+        if (search_was_active)
+          std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->focus({-1, -1}); // {-1, -1} since the position won't be changed anyway
+      },
+      false
+    );
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
+
+
+    window.draw(search_results_background);
 
     // Show search results
 
     int idx = 0;
     float last_y_pos = 0.f;
 
-    float total_content_h = (entry_h + 10.f) * search_results.size() + 20.f;
-    float max_scroll = std::max(0.f, total_content_h - search_results_background_h + approx_unit / 2 + approx_dl_prompt_h / 2);
-    playlist_sel_scroll = std::clamp(playlist_sel_scroll, 0.f, max_scroll);
+    float total_content_h = (playlist_search_entry_height + 10.f) * search_results.size() + 20.f;
+    float max_scroll = std::max(playlist_search_scroll_lower_bound / 2, total_content_h - search_results_background_h - playlist_search_entry_unit / 2 - 10.f);
+    playlist_sel_scroll = std::clamp(playlist_sel_scroll, playlist_search_scroll_lower_bound, max_scroll);
 
     float view_left = search_results_background.getPosition().x / window_size.x;
     float view_top = (search_results_background.getPosition().y) / window_size.y;
     float view_width = search_results_background.getGlobalBounds().size.x / window_size.x;
     float view_height = search_results_background_h / window_size.y;
+
+    float download_prompt_height = 75.f;
 
     sf::View search_results_view;
     search_results_view.setSize({
@@ -263,7 +286,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     });
     search_results_view.setCenter({
       search_results_background.getPosition().x + search_results_background.getGlobalBounds().size.x / 2.f,
-      search_results_background.getPosition().y - approx_dl_prompt_h + search_results_background_h / 2.f + playlist_sel_scroll
+      search_results_background.getPosition().y + search_results_background_h / 2.f + playlist_sel_scroll
     });
     search_results_view.setViewport(sf::FloatRect(
       {view_left, view_top},
@@ -275,7 +298,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     for (const int& search_res_id : search_results) {
       std::string search_res_path = base_music_path_data + std::to_string(search_res_id);
 
-      last_y_pos = (entry_h + 10.f) * idx + 10.f;
+      last_y_pos = (playlist_search_entry_height + 10.f) * idx + 10.f;
 
       sf::Texture search_res_cover_texture(search_res_path + ".small.png");
       sf::RoundedRectangleShape search_res_cover({queue_cover_size, queue_cover_size}, 8, main_n);
@@ -299,7 +322,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       setFontSize(search_res_artist, small_font_size);
       search_res_artist.setPosition({search_res_title.getPosition().x, search_res_title.getPosition().y + 20.f});
 
-      sf::RoundedRectangleShape search_res_background({search_results_background.getGlobalBounds().size.x - 10.f, entry_h + 5.f}, 8, main_n);
+      sf::RoundedRectangleShape search_res_background({search_results_background.getGlobalBounds().size.x - 10.f, playlist_search_entry_height + 5.f}, 8, main_n);
       search_res_background.setFillColor(background_shadow_color);
       search_res_background.setPosition({search_res_cover.getPosition().x - 5.f, search_res_cover.getPosition().y - 5.f});
 
@@ -319,44 +342,54 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       window.draw(search_res_more);
 
       auto search_res_more_bounds = search_res_more.getGlobalBounds();
-      search_res_more_bounds.size.y = 30;
-      search_res_more_bounds.position.y += 45.f - playlist_sel_scroll;
+      search_res_more_bounds.size.y = 30.f;
+      search_res_more_bounds.position.y -= 15.f;
 
-      if (search_results_background.getGlobalBounds().contains(search_res_more_bounds.position)) {
-        new_click_event(search_res_click_events, "search_res_more_bounds", [search_res_id](MenuData& menu_data) {
+      auto actual_results_bounds = search_results_background.getGlobalBounds();
+      auto result_bounds_offset = 40.f;
+      actual_results_bounds.position.y += playlist_sel_scroll - result_bounds_offset;
+      actual_results_bounds.size.y += result_bounds_offset;
+
+      if (actual_results_bounds.contains(search_res_more_bounds.position)) {
+        new_click_event(search_res_click_events, "search_res_more_bounds_" + std::to_string(search_res_id), [search_res_id](MenuData& menu_data) {
           std::cout << "Edit " << search_res_id << std::endl;
         }, search_res_more_bounds, sf::Mouse::Button::Left, nullptr, search_results_view);
       }
 
-      auto unit_size = search_res_background.getGlobalBounds().size.y + 13.5;
+      auto unit_size = search_res_background.getGlobalBounds().size.y + 13.5f;
       last_y_pos += unit_size;
 
       idx++;
     }
 
-    window.setView(window.getDefaultView());
+    window.setView(default_view);
 
     // Download prompt
 
-    sf::RoundedRectangleShape download_prompt_background({search_results_background.getGlobalBounds().size.x - 10.f, 75.f}, 8, main_n);
-    download_prompt_background.setFillColor(background_shadow_color);
-    download_prompt_background.setPosition({
-      search_results_background.getPosition().x + 5.f,
-      search_results_background.getPosition().y + search_results_background.getGlobalBounds().size.y - download_prompt_background.getGlobalBounds().size.y - 5.f
-    });
+    // sf::RoundedRectangleShape download_prompt_background({search_results_background.getGlobalBounds().size.x - 10.f, download_prompt_height}, 8, main_n);
+    // download_prompt_background.setFillColor(background_shadow_color);
+    // download_prompt_background.setPosition({
+    //   search_results_background.getPosition().x + 5.f,
+    //   search_results_background.getPosition().y + search_results_background.getGlobalBounds().size.y - download_prompt_background.getGlobalBounds().size.y - 5.f
+    // });
 
-    sf::Text download_prompt(default_font, "Download '" + playlist_sel.data->search->get_input_string() + "'");
-    download_prompt.setPosition({
-      download_prompt_background.getPosition().x + 5.f,
-      download_prompt_background.getPosition().y + download_prompt_background.getGlobalBounds().size.y / 2 - download_prompt.getGlobalBounds().size.y / 2
-    });
-    setFontSize(download_prompt, small_font_size);
-    download_prompt.setFillColor(light_text_color);
+    // sf::Text download_prompt(default_font, "Download '" + playlist_sel.data->search->get_input_string() + "'");
+    // download_prompt.setPosition({
+    //   download_prompt_background.getPosition().x + 5.f,
+    //   download_prompt_background.getPosition().y + download_prompt_background.getGlobalBounds().size.y / 2 - download_prompt.getGlobalBounds().size.y / 2
+    // });
+    // setFontSize(download_prompt, small_font_size);
+    // download_prompt.setFillColor(light_text_color);
 
-    window.draw(download_prompt_background);
-    window.draw(download_prompt);
+    // if (playlist_sel.data->search->get_input_string().empty()) {
+    //   download_prompt.setString("Type the name of a song into the search bar to download it.");
+    //   download_prompt.setFillColor(lighter_text_color);
+    // }
 
-    new_click_event(search_res_click_events, "download_prompt_background", [](MenuData& menu_data) {
+    // window.draw(download_prompt_background);
+    // window.draw(download_prompt);
+
+    playlist_sel.data->search->register_action([](InputComponent*, MenuData& menu_data){
       download_song_thread = std::unique_ptr<std::thread>(new std::thread(
         [=](){
           int code = download_song_from_query(std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->get_input_string());
@@ -368,11 +401,13 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
         }
       ));
-    }, download_prompt_background.getGlobalBounds(), sf::Mouse::Button::Left);
+    });
   }
   else {
+    search_was_active = false;
     can_search_string_scroll = false;
     data.search->draw_input_shadow();
+    data.search->background_reset_corner_radii();
   }
 
   data.search->draw();
@@ -384,7 +419,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   window.draw(*data.add_playlist);
 
   new_click_event(click_events, "add_playlist", [](MenuData& menu_data) {
-    popup_components.at("add_playlist")->hidden = false;
+    popup_components.at("add_playlist")->show();
   }, data.add_playlist->getGlobalBounds(), sf::Mouse::Button::Left);
 
 

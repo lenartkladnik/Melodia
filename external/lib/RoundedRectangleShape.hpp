@@ -66,6 +66,9 @@ class RoundedRectangleShape : public sf::Shape
         ////////////////////////////////////////////////////////////
         const Vector2f& getSize() const;
 
+        // Custom addition
+        void setCornerRadii(std::array<float, 4> radii);
+
         ////////////////////////////////////////////////////////////
         /// \brief Set the radius of the rounded corners
         ///
@@ -84,7 +87,7 @@ class RoundedRectangleShape : public sf::Shape
         /// \see setCornersRadius
         ///
         ////////////////////////////////////////////////////////////
-        float getCornersRadius() const;
+        float getCornersRadius(size_t index) const;
 
         ////////////////////////////////////////////////////////////
         /// \brief Set the number of points of each corner
@@ -121,7 +124,7 @@ class RoundedRectangleShape : public sf::Shape
         // Member data
         ////////////////////////////////////////////////////////////
         Vector2f mySize;
-        float myRadius;
+        std::array<float, 4> myRadii;
         unsigned int myCornerPointCount;
 };
 }
