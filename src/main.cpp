@@ -227,6 +227,21 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    // Hover effects TODO: Not working
+    if (!pause_main_input_handling) {
+      for (const auto& item : hover_events) {
+        if (item.bounds.contains((sf::Vector2f)sf::Mouse::getPosition(window))) {
+          if (!item.component->is_hidden()) {
+            std::cout << "Hover on: " << item.id << "\n";
+            item.component->on_hover();
+          }
+        }
+        else {
+          item.component->off_hover();
+        }
+      }
+    }
+
     switch (menu_data.type) {
       case (MenuData::Player): {
         if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
@@ -235,10 +250,6 @@ int main(int argc, char *argv[]) {
         }
 
         auto& player = std::get<MenuData::PlayerData>(menu_data.data);
-
-        // if (input_active) {
-        //   player.data->search->update();
-        // }
 
         if (player.seeking) {
           if (!sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
@@ -339,10 +350,6 @@ int main(int argc, char *argv[]) {
       case (MenuData::PlaylistSelector): {
         auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
-        // if (input_active) {
-        //   playlist_sel.data->search->update();
-        // }
-
         auto pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
         // Hover effects
@@ -353,7 +360,6 @@ int main(int argc, char *argv[]) {
           playlist_sel.reset_cursor = false;
         }
         else if (
-            playlist_sel.data->add_playlist->getGlobalBounds().contains(pos) ||
             playlist_sel.data->search->action_button_bounds().contains(pos) ||
             !playlist_sel.reset_cursor
           ) {

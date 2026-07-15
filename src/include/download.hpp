@@ -1,6 +1,8 @@
 #ifndef DOWNLOAD_HPP
 #define DOWNLOAD_HPP
 
-bool download_song_from_query(const std::string& query);
+#include "data.hpp"
+
+bool download_from_search(MenuData& menu_data);
 
 #endif

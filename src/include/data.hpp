@@ -77,22 +77,18 @@ extern const sf::Color white_color;
 extern const sf::Color title_color;
 extern const sf::Color artist_color;
 
+extern const sf::Color hover_sub;
+
 extern const sf::Cursor default_cursor;
 extern const sf::Cursor text_cursor;
 extern const sf::Cursor hand_cursor;
 
 extern sf::Font default_font;
 
-// extern bool input_active;
-// extern size_t cursor_pos;
 extern bool held_left_mb_down;
-// extern bool reset_cursor;
-// extern std::string input_string;
-// extern std::string prev_input_string;
 extern std::vector<int> search_results;
 extern std::string progress_bar_string;
 extern std::string progress_bar_doing_string;
-// extern std::string input_prompt;
 extern float progress_bar_amount;
 extern float progress_bar_total;
 extern std::unique_ptr<std::thread> download_song_thread;
@@ -156,6 +152,17 @@ void new_click_event(
   std::function<void(MenuData&)> function,
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr,
+  sf::View view = default_view
+);
+
+struct HoverEvent : UIEvent {};
+
+extern std::vector<HoverEvent> hover_events;
+void new_hover_event(
+  std::vector<HoverEvent>& container,
+  std::string id,
+  sf::FloatRect bounds,
   UIComponent* component = nullptr,
   sf::View view = default_view
 );
@@ -226,7 +233,7 @@ class DrawformableObject {
     return *transformable_;
   }
 
-  // Very unsafe getGlobalBounds implementation, requires drawable_ to be a sf::Transformable object
+  // Unsafe getGlobalBounds implementation, requires drawable_ to be a sf::Transformable object
   sf::FloatRect getGlobalBounds() const {
     // Try Sprite
     if (auto sprite = dynamic_cast<sf::Sprite*>(drawable_.get())) {
@@ -410,7 +417,7 @@ class MusicPlayer {
     bool is_stopped() {
       if (music.getStatus() == sf::SoundSource::Status::Stopped) {
         if (started) return true;
-        started = true; // started is needed because the music starts as stopped and is
+        started = true; // 'started' is needed because the music starts as stopped and is
                         // effectively stopped twice, once at the start and once at the end
       }
 
@@ -424,6 +431,7 @@ class UIComponent {
     int z_index;
     bool m_hidden = false;
     bool m_focused = false;
+    bool m_hover = false;
 
     virtual void draw() {};
 
@@ -451,6 +459,14 @@ class UIComponent {
       return m_hidden;
     }
 
+    virtual void on_hover() {
+      m_hover = true;
+    }
+
+    virtual void off_hover() {
+      m_hover = false;
+    }
+
     UIComponent(std::string id, bool hidden = false)
       : id(std::move(id))
     {
@@ -476,6 +492,7 @@ class InputComponent : public UIComponent {
     sf::Clock cursor_clock;
     std::string prev_input_string = "";
     std::string input_prompt;
+    float corner_radius;
     sf::RoundedRectangleShape input_background;
     sf::RoundedRectangleShape input_shadow;
     sf::Text input_before_cursor;
@@ -651,7 +668,7 @@ class InputComponent : public UIComponent {
     }
 
     void background_reset_corner_radii() {
-      input_background.setCornersRadius(20);
+      input_background.setCornersRadius(corner_radius);
     }
 
     sf::FloatRect action_button_bounds() {
@@ -664,11 +681,12 @@ class InputComponent : public UIComponent {
       return dummy_rect;
     }
 
-    void register_action(std::function<void(InputComponent*, MenuData&)> action_function) {
-      if (action_button)
-        new_click_event(click_events, id, [action_function, this](MenuData& menu_data) {
-          action_function(this, menu_data);
+    void register_action(std::function<void(MenuData&)> action_function) {
+      if (action_button) {
+        new_click_event(click_events, id + "_action_button", [action_function](MenuData& menu_data) {
+          action_function(menu_data);
         }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
+      }
     }
 
     InputComponent(
@@ -678,12 +696,14 @@ class InputComponent : public UIComponent {
       sf::Vector2f input_pos,
       std::string prompt,
       std::shared_ptr<sf::Texture> action_tex,
-      std::function<void(InputComponent*, MenuData&)> action_function,
+      std::function<void(MenuData&)> action_function,
+      float corner_radius = 20,
       bool hidden = false
     )
       : UIComponent(id, hidden),
         window(render_window),
         input_prompt(prompt),
+        corner_radius(corner_radius),
         input_before_cursor(default_font, prompt, 20),
         input_after_cursor(default_font, "", 20)
 
@@ -703,7 +723,7 @@ class InputComponent : public UIComponent {
       background_reset_corner_radii();
 
       input_shadow.setSize({input_background.getGlobalBounds().size.x + 5.f, input_background.getGlobalBounds().size.y + 5.f});
-      input_shadow.setCornersRadius(20);
+      input_shadow.setCornersRadius(corner_radius);
       input_shadow.setCornerPointCount(main_n);
       input_shadow.setPosition({input_background.getPosition().x - 2.5f, input_background.getPosition().y + 3.f});
       input_shadow.setFillColor(dark_main_color);
@@ -731,8 +751,7 @@ class InputComponent : public UIComponent {
             this->focus(pos);
         },
         [this](MenuData& menu_data) {
-          if (!this->is_hidden())
-            this->unfocus();
+          this->unfocus();
         },
         input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
 
@@ -761,6 +780,7 @@ class ButtonComponent : public UIComponent {
     sf::RoundedRectangleShape button_shape;
     sf::Text button_text;
     std::function<void(MenuData&)> function;
+    sf::Color m_button_shape_color;
 
   public:
     void draw() override {
@@ -770,7 +790,16 @@ class ButtonComponent : public UIComponent {
       }
     }
 
-    void press() {
+    void on_hover() override {
+      m_hover = true;
+
+      button_shape.setFillColor(m_button_shape_color - hover_sub);
+    }
+
+    void off_hover() override {
+      m_hover = false;
+
+      button_shape.setFillColor(m_button_shape_color);
     }
 
     sf::FloatRect button_bounds() {
@@ -792,7 +821,8 @@ class ButtonComponent : public UIComponent {
       : UIComponent(id, hidden),
         window(render_window),
         button_text(default_font, text, 0),
-        function(function)
+        function(function),
+        m_button_shape_color(button_shape_color)
     {
       button_shape.setSize(size);
       button_shape.setPosition(pos);
@@ -928,7 +958,7 @@ class PopupComponent : public UIComponent {
     PopupComponent(std::string id)
       : UIComponent(id) {}
 
-    ~PopupComponent() = default; // The program erases the popup id by itself which causes the pointers to be freed
+    ~PopupComponent() = default; // Popup id gets erased by itself which causes the pointers to be freed
 
   // Disallow copy
   PopupComponent(const PopupComponent&) = delete;
@@ -1024,10 +1054,6 @@ struct StaticPlayerData {
 
 struct StaticPlaylistSelectorData {
   std::shared_ptr<InputComponent> search;
-  sf::RoundedRectangleShape control_corner;
-  sf::RoundedRectangleShape control_corner_shadow;
-  std::shared_ptr<sf::Texture> add_playlist_tex;
-  std::optional<sf::Sprite> add_playlist;
   std::shared_ptr<sf::Texture> playlist_play_tex;
   std::optional<sf::Sprite> playlist_play;
   std::vector<std::string> playlists;
@@ -1071,7 +1097,7 @@ struct MenuData {
   };
 
   struct PlaylistSelectorData {
-    bool is_valid = false; // Same as PlayerData is_valid
+    bool is_valid = false; // Same as PlayerData::is_valid
     std::shared_ptr<StaticPlaylistSelectorData> data;
     bool reset_cursor = true;
     bool search_active = false;
@@ -1083,7 +1109,7 @@ struct MenuData {
     MenuData::PlaylistSelectorData
   > data;
 
-  MenuData() : data(PlaylistSelectorData()) {} // Construct data with PlaylistSelectorData() just so that clang is happy
+  MenuData() : data(PlaylistSelectorData()) {} // Construct data with PlaylistSelectorData() so that clang is happy
 };
 
 #endif

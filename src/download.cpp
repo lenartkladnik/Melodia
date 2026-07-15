@@ -266,7 +266,7 @@ bool _download_cover_art(int new_id) {
   return true;
 }
 
-bool download_song_from_query(const std::string& query) {
+bool _download_song_from_query(const std::string& query) {
   if (pause_main_input_handling) return false; // Exit if a download is ongoing
 
   pause_main_input_handling = true;
@@ -376,4 +376,19 @@ bool _archive_org_download_song_from_query(int new_id, const std::string& title,
   }
 
   return false;
+}
+
+void download_from_search(MenuData& menu_data) {
+  download_song_thread = std::unique_ptr<std::thread>(new std::thread(
+    [=](){
+      auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
+
+      int code = _download_song_from_query(playlist_sel.data->search->get_input_string());
+      std::cout << code << "\n";
+
+      pause_main_input_handling = false;
+
+      playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
+    }
+  ));
 }

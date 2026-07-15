@@ -195,7 +195,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     sf::Vector2f{50.f, queue_background.getPosition().y + 10.f}, // position
     "Search",
     nullptr,
-    [](InputComponent*, MenuData&){}
+    [](MenuData&){}
   );
 
   // new_click_event(click_events, [](MenuData& menu_data) {

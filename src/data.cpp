@@ -90,22 +90,18 @@ extern const sf::Color white_color({212, 212, 212});
 extern const sf::Color title_color = text_color;
 extern const sf::Color artist_color = light_text_color;
 
+extern const sf::Color hover_sub({20, 20, 20});
+
 extern const sf::Cursor default_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Arrow).value();
 extern const sf::Cursor text_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Text).value();
 extern const sf::Cursor hand_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Hand).value();
 
 sf::Font default_font;
 
-// bool input_active = false;
-// size_t cursor_pos = 0;
 bool held_left_mb_down = false;
-// bool reset_cursor = true;
-// std::string input_string = "";
-// std::string prev_input_string = "";
 std::vector<int> search_results = {};
 std::string progress_bar_string = "";
 std::string progress_bar_doing_string = "";
-// std::string input_prompt = "";
 float progress_bar_amount = 0.f;
 float progress_bar_total = 0.f;
 std::unique_ptr<std::thread> download_song_thread;
@@ -119,6 +115,8 @@ bool search_was_active = false;
 
 std::vector<ClickEvent> click_events;
 std::vector<ClickEvent> search_res_click_events;
+
+std::vector<HoverEvent> hover_events;
 
 std::vector<FocusEvent> focus_events;
 
@@ -161,6 +159,12 @@ void new_click_event(std::vector<ClickEvent>& container, std::string id, std::fu
   for (const auto& each : container)
     if (each.id == id) return;
   container.push_back(ClickEvent{{std::move(id), bounds, view, component}, function, mouse_button});
+}
+
+void new_hover_event(std::vector<HoverEvent>& container, std::string id, sf::FloatRect bounds, UIComponent* component, sf::View view) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(HoverEvent{{std::move(id), bounds, view, component}});
 }
 
 void new_focus_event(std::vector<FocusEvent>& container, std::string id, std::function<void(MenuData&, sf::Vector2f&)> function, std::function<void(MenuData&)> else_function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view) {

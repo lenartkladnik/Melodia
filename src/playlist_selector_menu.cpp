@@ -23,7 +23,7 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
     sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f}, // position
     "Search",
     trash_input_c_tex,
-    [](InputComponent* input_c, MenuData& menu_data){}
+    download_from_search
   );
 
   // Playlist play overlay
@@ -33,71 +33,6 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   auto playlist_play_scale = (selector_cover_size - 10.f) / playlist_play.getGlobalBounds().size.x;
   playlist_play.setScale({playlist_play_scale, playlist_play_scale});
 
-  // The controls in the upper rightish corner of the screen
-
-  sf::RoundedRectangleShape control_corner({55.f, 50.f}, out_round, main_n);
-  control_corner.setPosition({window_size.x - control_corner.getGlobalBounds().size.x - 20.f, -10.f});
-  control_corner.setFillColor(background_color);
-
-  sf::RoundedRectangleShape control_corner_shadow(control_corner.getGlobalBounds().size, out_round, main_n);
-  control_corner_shadow.setPosition({control_corner.getPosition().x + shadow_offset, control_corner.getPosition().y + shadow_offset});
-  control_corner_shadow.setFillColor(dark_main_color);
-
-  // Items in the control corner
-
-  auto add_playlist_tex = load_texture("plus.png");
-
-  sf::Sprite add_playlist(*add_playlist_tex);
-  add_playlist.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});
-
-  // Popups
-
-  PopupComponent* add_playlist_popup = PopupComponent::Create("add_playlist");
-  add_playlist_popup->z_index = 1;
-
-  sf::RoundedRectangleShape add_playlist_background({600.f, 300.f}, 8, main_n);
-  add_playlist_background.setFillColor(light_background_color);
-  add_playlist_background.setPosition({
-    (window_size.x / 2) - (add_playlist_background.getGlobalBounds().size.x / 2),
-    (window_size.y / 2) - (add_playlist_background.getGlobalBounds().size.y / 2)
-  });
-
-  sf::Vector2f save_button_size = {90.f, 40.f};
-  auto save_button = std::make_shared<ButtonComponent>(
-    window,
-    "add_playlist_save_button", // id
-    "Create",
-    save_button_size, // size
-    sf::Vector2f{ // position
-      add_playlist_background.getPosition().x + add_playlist_background.getGlobalBounds().size.x - save_button_size.x - 10.f,
-      add_playlist_background.getPosition().y + add_playlist_background.getGlobalBounds().size.y - save_button_size.y - 10.f
-    },
-    [](MenuData& menu_data){
-      std::cout << "Create playlist\n";
-      popup_components.at("add_playlist")->hide();
-    }
-  );
-
-  auto title_input = std::make_shared<InputComponent>(
-    window,
-    "add_playlist_title_input_c", // id
-    sf::Vector2f{200.f, 38.f}, // size
-    sf::Vector2f{ // position
-      add_playlist_background.getPosition().x + 10.f,
-      add_playlist_background.getPosition().y + 10.f
-    },
-    "Title",
-    nullptr,
-    [](InputComponent*, MenuData&){}
-  );
-
-  add_playlist_popup->new_input("title_input", title_input);
-  add_playlist_popup->new_button("save_button", save_button);
-  add_playlist_popup->new_rounded_rectangle_shape("background", std::move(add_playlist_background));
-
-  add_playlist_popup->hide(); // Hide when all the components have been added to the popup since hiding the popup propagates and hides them as well
-
-
   auto playlists = get_all_playlists();
 
   DTCache drawables_cache;
@@ -105,10 +40,6 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
 
   auto data = std::make_shared<StaticPlaylistSelectorData>();
   data->search = search;
-  data->control_corner = control_corner;
-  data->control_corner_shadow = control_corner_shadow;
-  data->add_playlist_tex = add_playlist_tex;
-  data->add_playlist = add_playlist;
   data->playlist_play_tex = playlist_play_tex;
   data->playlist_play = playlist_play;
   data->playlists = playlists;
@@ -123,10 +54,11 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
   window.clear(main_color);
 
-  // TEMPORARY - show a song
-
+  // Drag and drop area
+  // TODO: Implement
 
   // Favourites
+  // TODO: Implement
 
   // Playlists
 
@@ -363,45 +295,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     }
 
     window.setView(default_view);
-
-    // Download prompt
-
-    // sf::RoundedRectangleShape download_prompt_background({search_results_background.getGlobalBounds().size.x - 10.f, download_prompt_height}, 8, main_n);
-    // download_prompt_background.setFillColor(background_shadow_color);
-    // download_prompt_background.setPosition({
-    //   search_results_background.getPosition().x + 5.f,
-    //   search_results_background.getPosition().y + search_results_background.getGlobalBounds().size.y - download_prompt_background.getGlobalBounds().size.y - 5.f
-    // });
-
-    // sf::Text download_prompt(default_font, "Download '" + playlist_sel.data->search->get_input_string() + "'");
-    // download_prompt.setPosition({
-    //   download_prompt_background.getPosition().x + 5.f,
-    //   download_prompt_background.getPosition().y + download_prompt_background.getGlobalBounds().size.y / 2 - download_prompt.getGlobalBounds().size.y / 2
-    // });
-    // setFontSize(download_prompt, small_font_size);
-    // download_prompt.setFillColor(light_text_color);
-
-    // if (playlist_sel.data->search->get_input_string().empty()) {
-    //   download_prompt.setString("Type the name of a song into the search bar to download it.");
-    //   download_prompt.setFillColor(lighter_text_color);
-    // }
-
-    // window.draw(download_prompt_background);
-    // window.draw(download_prompt);
-
-    playlist_sel.data->search->register_action([](InputComponent*, MenuData& menu_data){
-      download_song_thread = std::unique_ptr<std::thread>(new std::thread(
-        [=](){
-          int code = download_song_from_query(std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->get_input_string());
-          std::cout << code << "\n";
-
-          pause_main_input_handling = false;
-
-          auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
-          playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
-        }
-      ));
-    });
   }
   else {
     search_was_active = false;
@@ -411,16 +304,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   }
 
   data.search->draw();
-
-  // Add Playlist
-
-  window.draw(data.control_corner_shadow);
-  window.draw(data.control_corner);
-  window.draw(*data.add_playlist);
-
-  new_click_event(click_events, "add_playlist", [](MenuData& menu_data) {
-    popup_components.at("add_playlist")->show();
-  }, data.add_playlist->getGlobalBounds(), sf::Mouse::Button::Left);
 
 
   // Popups / Overlays
@@ -466,10 +349,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     window.draw(pbar_progress);
     window.draw(pbar_progress_done);
   }
-
-  // Add new playlist
-  popup_components.at("add_playlist")->draw();
-
 
   window.display();
 
