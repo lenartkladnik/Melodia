@@ -64,11 +64,13 @@ extern const sf::Color dark_main_color;
 extern const sf::Color background_color;
 extern const sf::Color dark_background_color;
 extern const sf::Color light_background_color;
+extern const sf::Color lighter_background_color;
 extern const sf::Color background_shadow_color;
 extern const sf::Color dark_background_shadow_color;
 extern const sf::Color background_shadow_color_transparent;
 extern const sf::Color dark_background_shadow_color_transparent;
 extern const sf::Color progress_color;
+extern const sf::Color progress_done_color;
 extern const sf::Color text_color;
 extern const sf::Color cursor_color;
 extern const sf::Color light_text_color;
@@ -330,6 +332,7 @@ class MusicPlayer {
   public:
     sf::Music music;
     bool muted = false;
+    bool was_muted = false;
     bool playing = false;
     bool started = false;
     float old_volume = music.getVolume();
@@ -394,11 +397,9 @@ class MusicPlayer {
       else music.setVolume(100); // fallback
     }
 
-    void silent_mute() {
-      // don't set apparent_volume
-      muted = true;
-      old_volume = music.getVolume();
-      music.setVolume(0); // mute
+    void mute_while_seeking() {
+      // don't set anything but the actual volume
+      music.setVolume(0);
     }
 
     float get_volume() const {
@@ -407,6 +408,7 @@ class MusicPlayer {
 
     void set_volume(float volume) {
       apparent_volume = volume;
+      old_volume = volume * 100;
       music.setVolume(volume * 100);
     }
 
@@ -560,9 +562,15 @@ class InputComponent : public UIComponent {
             break;
         }
       }
-      else if ((int)input_string.size() < input_max_char) {
+      else {
         input_string.insert(cursor_pos, char32_to_utf8(input));
         cursor_pos++;
+        this->update();
+        if (this->is_text_too_long()) {
+          cursor_pos--;
+          input_string.erase(cursor_pos, 1);
+        }
+        this->update();
       }
     }
 
@@ -610,6 +618,22 @@ class InputComponent : public UIComponent {
       }
     }
 
+    bool is_text_too_long() {
+      float action_button_size_x = 0.f;
+
+      if (action_button.has_value()) {
+        action_button_size_x = action_button.value().getGlobalBounds().size.x + 10.f; // + 10 so the text and action_button aren't touching
+      }
+
+      return (
+        input_before_cursor.getGlobalBounds().size.x +
+        input_after_cursor.getGlobalBounds().size.x) // Full size of the text
+        >
+        input_background.getGlobalBounds().size.x -
+        (input_before_cursor.getPosition().x - input_background.getPosition().x) - // Subtract the offset of the text at the start
+        action_button_size_x; // Subtract the size of the action button
+    }
+
     bool is_active() {
       return input_active;
     }
@@ -642,7 +666,7 @@ class InputComponent : public UIComponent {
 
     void draw_cursor() {
       sf::RectangleShape cursor({1.2, input_background.getGlobalBounds().size.y - 15.f});
-      cursor.setPosition({input_before_cursor.getPosition().x + 2.f + input_before_cursor.getGlobalBounds().size.x, input_before_cursor.getPosition().y + 1.f});
+      cursor.setPosition({input_before_cursor.getPosition().x + 2.f + input_before_cursor.getGlobalBounds().size.x, input_background.getPosition().y + 6.f}); // input_before_cursor.getPosition().y + 1.f});
       cursor.setFillColor(cursor_color);
       window.draw(cursor);
     }
@@ -730,7 +754,7 @@ class InputComponent : public UIComponent {
 
       input_before_cursor.setFillColor(light_text_color);
       setFontSize(input_before_cursor, medium_font_size);
-      input_before_cursor.setPosition({input_background.getPosition().x + 16.f, input_background.getPosition().y + 5.f}); // + 6.f});
+      input_before_cursor.setPosition({input_background.getPosition().x + 16.f, input_background.getPosition().y + input_before_cursor.getGlobalBounds().size.y - 2.5});
 
       input_after_cursor.setFillColor(text_color);
       setFontSize(input_after_cursor, medium_font_size);
@@ -1054,8 +1078,6 @@ struct StaticPlayerData {
 
 struct StaticPlaylistSelectorData {
   std::shared_ptr<InputComponent> search;
-  std::shared_ptr<sf::Texture> playlist_play_tex;
-  std::optional<sf::Sprite> playlist_play;
   std::vector<std::string> playlists;
   DTCache drawables_cache;
 

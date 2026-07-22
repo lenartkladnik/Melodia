@@ -24,13 +24,14 @@ int main(int argc, char *argv[]) {
     std::cerr << "Error: Failed to load font 'base-font.tff'." << std::endl;
     return 1;
   }
+  default_font.setSmooth(true);
 
   window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
   MenuData menu_data;
 
   switch_to_playlist_selector(menu_data, window); // Start as the playlist selector
-
+  // switch_to_player(menu_data, "tmp");
 
   getFontOffsetPixels(small_font_size);
   getFontOffsetPixels(medium_font_size);
@@ -254,8 +255,10 @@ int main(int argc, char *argv[]) {
         if (player.seeking) {
           if (!sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
             player.seeking = false;
-            player.music->unmute();
-            if (player.was_playing) player.music->play();
+            if (!player.music->was_muted)
+              player.music->unmute();
+            if (player.was_playing)
+              player.music->play();
           }
 
           auto coords_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));

@@ -379,11 +379,14 @@ bool _archive_org_download_song_from_query(int new_id, const std::string& title,
 }
 
 void download_from_search(MenuData& menu_data) {
+  auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
+  auto query = playlist_sel.data->search->get_input_string();
+
+  if (query.empty()) return; // Don't download without query
+
   download_song_thread = std::unique_ptr<std::thread>(new std::thread(
     [=](){
-      auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
-
-      int code = _download_song_from_query(playlist_sel.data->search->get_input_string());
+      int code = _download_song_from_query(query);
       std::cout << code << "\n";
 
       pause_main_input_handling = false;

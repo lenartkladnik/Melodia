@@ -22,7 +22,11 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   sf::RoundedRectangleShape cover({cover_size, cover_size}, 8, main_n);
 
-  auto cover_texture = load_texture(song_path + ".png");
+  auto cover_texture = std::make_shared<sf::Texture>();
+  if (!cover_texture->loadFromFile(song_path + ".png")) {
+    std::cerr << "Error: Failed to load '" << song_path << ".png" << "'." << std::endl;
+  }
+  cover_texture->setSmooth(true);
 
   cover.setTexture(cover_texture.get());
   cover.setPosition({half - cover.getGlobalBounds().size.x / 2, padding_top});
@@ -264,7 +268,8 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.seeking = true;
-    player.music->silent_mute();
+    player.music->mute_while_seeking();
+    player.music->was_muted = player.music->muted;
     player.was_playing = player.music->is_playing();
   }, progress.getGlobalBounds(), sf::Mouse::Button::Left);
 
@@ -416,12 +421,12 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
   sf::RoundedRectangleShape progress_done({player_data.progress_width * playback_pos, progress_height}, progress_round, progress_n);
 
-  progress_done.setFillColor(main_color);
+  progress_done.setFillColor(progress_done_color);
   progress_done.setPosition(player_data.progress.getPosition());
 
   sf::Text time_left(default_font, music->get_human_left_duration());
   setFontSize(time_left, medium_font_size);
-  time_left.setPosition({progress_done.getPosition().x + player_data.progress_width + 10.f, player_data.progress.getPosition().y - 10.f});
+  time_left.setPosition({progress_done.getPosition().x + player_data.progress_width + 10.f, player_data.progress.getPosition().y - 5.f});
   time_left.setFillColor({66, 66, 66});
 
   if (music->is_playing()) main_control->setTexture(*player_data.pause_tex);
@@ -507,10 +512,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
     sf::RoundedRectangleShape now_playing_bar({queue_entry_background.getGlobalBounds().size.x - 12.f, 4.f}, 2, main_n);
     now_playing_bar.setFillColor(main_color);
-
-    sf::Texture queue_play_tex = *load_texture("queue_play.png");
-
-    sf::Sprite queue_play(queue_play_tex);
 
     auto get_queue_entry_position = [&player_data](int index) {
       return player_data.search->background_pos().y + player_data.search->background_bounds().size.y + 20.f + (queue_cover_size + 20.f) * index;
@@ -669,7 +670,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       // Hover checks
 
       auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-      bool draw_queue_play = false;
 
       if (player.dragging_queue == -1) { // Only show hover effects when not dragging an item
         if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
@@ -677,17 +677,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
           queue_entry_duration.setFillColor(text_color);
           setFontSize(queue_entry_duration, medium_2_font_size);
           queue_entry_duration.move({0, -(queue_entry_duration.getGlobalBounds().size.y / 2)});
-
-          if (id != player.song_id) {
-            draw_queue_play = true;
-            queue_play.setPosition({
-              queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x / 2 - queue_play.getGlobalBounds().size.x / 2,
-              queue_cover.getPosition().y + queue_cover.getGlobalBounds().size.y / 2 - queue_play.getGlobalBounds().size.y / 2
-            });
-
-            queue_cover.setScale({0.45, 0.45}); // Scale is reset at the top
-            queue_cover.move({24.f, 28.f});
-          }
         }
         else {
           // Reset
@@ -695,7 +684,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
         }
 
         if (
-            (draw_queue_play && queue_play.getGlobalBounds().contains(mouse_pos)) ||
+            (queue_cover.getGlobalBounds().contains(mouse_pos)) ||
             queue_entry_duration.getGlobalBounds().contains(mouse_pos)
           ) {
 
@@ -716,7 +705,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       if (!held_left_mb_down && sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
         player.queue_play_pos = mouse_pos;
 
-      if (draw_queue_play && player.queue_play_pos.x != -1 && queue_play.getGlobalBounds().contains(player.queue_play_pos)) { // Clicked on the play / cover art image
+      if (player.queue_play_pos.x != -1 && queue_cover.getGlobalBounds().contains(player.queue_play_pos)) { // Clicked on the play / cover art image
         player.song_id = id;
         player.queue_play_pos = {-1, -1};
       }
@@ -751,14 +740,9 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
       window.draw(queue_entry_shadow);
       window.draw(queue_entry_background);
-      if (!draw_queue_play) {
-        window.draw(queue_cover_shadow);
-      }
+      window.draw(queue_cover_shadow);
       window.draw(queue_entry_duration);
       window.draw(queue_cover);
-      if (draw_queue_play) {
-        window.draw(queue_play);
-      }
       window.draw(queue_title);
       window.draw(queue_artist);
 
