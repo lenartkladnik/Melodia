@@ -23,6 +23,7 @@ sources = [
     "src/animation.cpp",
     "src/download.cpp",
     "src/utils.cpp",
+    "src/song_containers.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]
 

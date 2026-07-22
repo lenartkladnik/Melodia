@@ -58,7 +58,9 @@ extern const float queue_contracted_width = 50.f;
 extern const float control_corner_gap = 15.f;
 extern const float scroll_speed = 25.f;
 
-extern const float font_multiplier = 1.8; // Multiply the font values (this exists purely for easier changing between fonts whilst developing)
+extern const float font_multiplier = 1; // Multiply the font values (this exists purely for easier changing between fonts whilst developing)
+                                          // Inter: 1
+                                          // Dongle: 1.8
 extern const float small_font_size = (18 * font_multiplier);
 extern const float medium_font_size = (20 * font_multiplier);
 extern const float medium_2_font_size = (22 * font_multiplier);
@@ -73,15 +75,17 @@ sf::View default_view = window.getDefaultView();
 int global_z_index = 0;
 
 extern const sf::Color main_color({232, 224, 209});
-extern const sf::Color dark_main_color({209, 204, 194, 50});
-extern const sf::Color background_color({196, 186, 189, 50});
-extern const sf::Color dark_background_color({156, 146, 149, 50});
+extern const sf::Color dark_main_color({main_color.r - 5, main_color.g - 5, main_color.b - 5}); // ({209, 204, 194});
+extern const sf::Color background_color({227, 219, 211}); //({196, 186, 189});
+extern const sf::Color dark_background_color({background_color.r - 5, background_color.g - 5, background_color.b - 5}); // ({156, 146, 149});
 extern const sf::Color light_background_color({0, 0, 0, 10});
-extern const sf::Color background_shadow_color({176, 166, 169, 50});
-extern const sf::Color dark_background_shadow_color({153, 144, 147, 50});
+extern const sf::Color lighter_background_color({0, 0, 0, 5});
+extern const sf::Color background_shadow_color({background_color.r - 10, background_color.g - 10, background_color.b - 10}); // ({176, 166, 169});
+extern const sf::Color dark_background_shadow_color({dark_background_color.r - 10, dark_background_color.g - 10, dark_background_color.b - 10}); // ({153, 144, 147});
 extern const sf::Color background_shadow_color_transparent({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
 extern const sf::Color dark_background_shadow_color_transparent({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
-extern const sf::Color progress_color(212, 201, 204);
+extern const sf::Color progress_color({212, 201, 204});
+extern const sf::Color progress_done_color({32, 32, 32});
 extern const sf::Color text_color({10, 10, 10});
 extern const sf::Color cursor_color({40, 40, 40});
 extern const sf::Color light_text_color({80, 80, 80});
@@ -90,7 +94,7 @@ extern const sf::Color white_color({212, 212, 212});
 extern const sf::Color title_color = text_color;
 extern const sf::Color artist_color = light_text_color;
 
-extern const sf::Color hover_sub({20, 20, 20});
+extern const sf::Color hover_sub({20, 20, 20}); // TODO: Replace this with int since sf::Color - sf::Color doesn't work
 
 extern const sf::Cursor default_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Arrow).value();
 extern const sf::Cursor text_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Text).value();

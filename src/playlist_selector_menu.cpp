@@ -9,6 +9,7 @@
 #include "include/player_menu.hpp"
 #include "include/download.hpp"
 #include "include/utils.hpp"
+#include "include/song_containers.hpp"
 
 std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
   reset_globals();
@@ -26,13 +27,6 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
     download_from_search
   );
 
-  // Playlist play overlay
-  auto playlist_play_tex = load_texture("queue_play.png");
-
-  sf::Sprite playlist_play(*playlist_play_tex);
-  auto playlist_play_scale = (selector_cover_size - 10.f) / playlist_play.getGlobalBounds().size.x;
-  playlist_play.setScale({playlist_play_scale, playlist_play_scale});
-
   auto playlists = get_all_playlists();
 
   DTCache drawables_cache;
@@ -40,8 +34,6 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
 
   auto data = std::make_shared<StaticPlaylistSelectorData>();
   data->search = search;
-  data->playlist_play_tex = playlist_play_tex;
-  data->playlist_play = playlist_play;
   data->playlists = playlists;
   data->drawables_cache = drawables_cache;
   return data;
@@ -54,8 +46,26 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
   window.clear(main_color);
 
-  // Drag and drop area
-  // TODO: Implement
+  // Drag and drop area  TODO: Make this scrollable
+  sf::Vector2f playlist_drop_area_gap(60.f, 180.f);
+  sf::RoundedRectangleShape playlist_drop_area_background(
+    sf::Vector2f(
+      window_size.x - playlist_drop_area_gap.x * 2,
+      window_size.y - playlist_drop_area_gap.y - 20.f
+    ),
+    8,
+    main_n
+  );
+  playlist_drop_area_background.setPosition(playlist_drop_area_gap);
+  playlist_drop_area_background.setFillColor(lighter_background_color);
+
+  AreaComponent playlist_drop_area(
+    "playlist_drop_area",
+    playlist_drop_area_background.getGlobalBounds(),
+    [](MenuData&){}
+  );
+
+  window.draw(playlist_drop_area_background);
 
   // Favourites
   // TODO: Implement
@@ -76,32 +86,29 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       (selector_cover_size + selector_gap) * ((int)(i / max_playlists_per_line) + 1) + (cover_offset / 2)
     };
 
-    data.playlist_play->setPosition(cover_pos);
-    if (data.drawables_cache.contains(i)) { // Only draw existing ones
+    auto cover = std::make_shared<sf::RoundedRectangleShape>(sf::Vector2f(selector_cover_size - cover_offset, selector_cover_size - cover_offset), 8, main_n);
+
+    cover->setPosition(cover_pos);
+
+    if (data.drawables_cache.contains(i)) { // Only draw if the cache has it
 
       auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-      bool draw_playlist_play = false;
 
       auto& cover_dt = data.drawables_cache.get_item(i, data.drawables_cache.name_to_z_index(i, "cover"));
       if (cover_dt.drawformable->getGlobalBounds().contains(mouse_pos)) {
-        draw_playlist_play = true;
+        // TODO: Hover effect
       }
 
       data.drawables_cache.draw(i, window);
 
       new_click_event(click_events, "playlist_play_" + std::to_string(i), [i](MenuData& menu_data) {
         switch_to_player(menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
-      }, data.playlist_play->getGlobalBounds(), sf::Mouse::Button::Left);
+      }, cover->getGlobalBounds(), sf::Mouse::Button::Left);
 
       if (!pause_main_input_handling) {
-        if (draw_playlist_play) {
-          window.draw(*data.playlist_play);
-        }
-
         // Hover checks
 
-        // TODO: Figure out how to only change hover state when the obj has hidden false
-        if (data.playlist_play->getGlobalBounds().contains(mouse_pos) && draw_playlist_play) {
+        if (cover->getGlobalBounds().contains(mouse_pos)) {
           window.setMouseCursor(hand_cursor);
 
           playlist_sel.reset_cursor = false;
@@ -111,8 +118,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       }
     }
 
-    auto cover = std::make_shared<sf::RoundedRectangleShape>(sf::Vector2f(selector_cover_size - cover_offset, selector_cover_size - cover_offset), 8, main_n);
-
     auto cover_texture = std::make_shared<sf::Texture>();
     if (!cover_texture->loadFromFile(base_music_path_playlists + data.playlists[i] + ".png")) {
       std::cerr << "Error: Failed to load '" << base_music_path_playlists << data.playlists[i] << ".png" << "'." << std::endl;
@@ -120,7 +125,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     cover_texture->setSmooth(true);
 
     cover->setTexture(cover_texture.get());
-    cover->setPosition(cover_pos);
 
     auto sel_background = std::make_shared<sf::RoundedRectangleShape>(sf::Vector2f(selector_cover_size + selector_size.x, selector_size.y), 8, main_n);
     sel_background->setPosition({cover->getPosition().x - (cover_offset / 2), cover->getPosition().y - (cover_offset / 2)});
@@ -128,7 +132,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     auto sel_background_shadow = std::make_shared<sf::RoundedRectangleShape>(sel_background->getGlobalBounds().size, 8, main_n);
     sel_background_shadow->setPosition({sel_background->getPosition().x + shadow_offset, sel_background->getPosition().y + shadow_offset});
-    sel_background_shadow->setFillColor(dark_main_color);
+    sel_background_shadow->setFillColor(background_shadow_color_transparent);
 
     auto playlist_name = std::make_shared<sf::Text>(default_font, data.playlists[i]);
     playlist_name->setFillColor(text_color);
@@ -228,52 +232,22 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     window.setView(search_results_view);
 
     for (const int& search_res_id : search_results) {
-      std::string search_res_path = base_music_path_data + std::to_string(search_res_id);
-
       last_y_pos = (playlist_search_entry_height + 10.f) * idx + 10.f;
 
-      sf::Texture search_res_cover_texture(search_res_path + ".small.png");
-      sf::RoundedRectangleShape search_res_cover({queue_cover_size, queue_cover_size}, 8, main_n);
-      search_res_cover.setTexture(&search_res_cover_texture);
-      search_res_cover.setPosition({search_results_background.getPosition().x + 10.f, last_y_pos});
+      auto search_result = create_small_song_container(
+        search_res_id,
+        sf::Vector2f(
+          search_results_background.getPosition().x + 10.f,
+          last_y_pos
+        ),
+        sf::Vector2f(
+          search_results_background.getGlobalBounds().size.x - 10.f,
+          playlist_search_entry_height + 5.f
+        )
+      );
+      draw_small_song_container(search_result);
 
-      sf::RoundedRectangleShape search_res_cover_shadow({queue_cover_size, queue_cover_size}, 8, main_n);
-      search_res_cover_shadow.setFillColor(dark_background_shadow_color);
-      search_res_cover_shadow.setPosition({search_res_cover.getPosition().x + small_shadow_offset, search_res_cover.getPosition().y + small_shadow_offset});
-
-      sf::Text search_res_title(default_font, get_song_title(search_res_id));
-      search_res_title.setFillColor(title_color);
-      setFontSize(search_res_title, small_font_size);
-      search_res_title.setPosition({
-        search_res_cover.getPosition().x + search_res_cover.getGlobalBounds().size.x + 15.f,
-        search_res_cover.getPosition().y + queue_cover_size / 3 - 10.f
-      });
-
-      sf::Text search_res_artist(default_font, get_song_artist(search_res_id));
-      search_res_artist.setFillColor(artist_color);
-      setFontSize(search_res_artist, small_font_size);
-      search_res_artist.setPosition({search_res_title.getPosition().x, search_res_title.getPosition().y + 20.f});
-
-      sf::RoundedRectangleShape search_res_background({search_results_background.getGlobalBounds().size.x - 10.f, playlist_search_entry_height + 5.f}, 8, main_n);
-      search_res_background.setFillColor(background_shadow_color);
-      search_res_background.setPosition({search_res_cover.getPosition().x - 5.f, search_res_cover.getPosition().y - 5.f});
-
-      sf::Text search_res_more(default_font, "...");
-      search_res_more.setFillColor(text_color);
-      setFontSize(search_res_more, small_font_size);
-      search_res_more.setPosition({
-        search_res_background.getPosition().x + search_res_background.getGlobalBounds().size.x - search_res_more.getGlobalBounds().size.x - 20.f,
-        (search_res_background.getPosition().y - 5.f) + (search_res_background.getGlobalBounds().size.y - 5.f) / 2 - search_res_more.getGlobalBounds().size.y
-      });
-
-      window.draw(search_res_background);
-      window.draw(search_res_cover_shadow);
-      window.draw(search_res_cover);
-      window.draw(search_res_title);
-      window.draw(search_res_artist);
-      window.draw(search_res_more);
-
-      auto search_res_more_bounds = search_res_more.getGlobalBounds();
+      auto search_res_more_bounds = search_result->more.value()->getGlobalBounds();
       search_res_more_bounds.size.y = 30.f;
       search_res_more_bounds.position.y -= 15.f;
 
@@ -288,7 +262,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         }, search_res_more_bounds, sf::Mouse::Button::Left, nullptr, search_results_view);
       }
 
-      auto unit_size = search_res_background.getGlobalBounds().size.y + 13.5f;
+      auto unit_size = search_result->background.getGlobalBounds().size.y + 13.5f;
       last_y_pos += unit_size;
 
       idx++;
@@ -340,7 +314,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     auto done = progress_bar_amount / progress_bar_total;
 
     sf::RoundedRectangleShape pbar_progress_done({done * pbar_progress.getGlobalBounds().size.x, pbar_progress.getGlobalBounds().size.y}, progress_round, progress_n);
-    pbar_progress_done.setFillColor(main_color);
+    pbar_progress_done.setFillColor(progress_done_color);
     pbar_progress_done.setPosition(pbar_progress.getPosition());
 
     window.draw(pbar_background);
