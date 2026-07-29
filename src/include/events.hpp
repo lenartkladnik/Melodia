@@ -20,7 +20,7 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
           best_item = &item;
         }
       } else {
-        // If not component is attached to the event simply default to a z_index of 0
+        // If no component is attached to the event simply default to a z_index of 0
         if (max_z_index < 0) {
           max_z_index = 0;
           best_item = &item;
@@ -40,8 +40,7 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
 }
 
 template<typename TEvent, typename TContainer, typename TPredicate, typename THandler>
-  requires (!requires(TEvent e) { e.position; })
-void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle) {
+void on_anywhere(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle) {
   const auto* e = event.getIf<TEvent>();
   if (!e) return;
   for (const auto& item : items) {

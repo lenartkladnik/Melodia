@@ -89,6 +89,7 @@ extern sf::Font default_font;
 
 extern bool held_left_mb_down;
 extern std::vector<int> search_results;
+extern int dragging_search_result;
 extern std::string progress_bar_string;
 extern std::string progress_bar_doing_string;
 extern float progress_bar_amount;
@@ -158,15 +159,35 @@ void new_click_event(
   sf::View view = default_view
 );
 
-struct HoverEvent : UIEvent {};
+struct ReleaseEvent : UIEvent {
+  std::function<void(MenuData&)> function;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<ReleaseEvent> release_events;
+extern std::vector<ReleaseEvent> search_res_release_events;
+void new_release_event(
+  std::vector<ReleaseEvent>& container,
+  std::string id,
+  std::function<void(MenuData&)> function,
+  sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr
+);
+
+struct HoverEvent : UIEvent {
+  std::function<void(MenuData&)> on_hover_function;
+  std::function<void(MenuData&)> off_hover_function;
+};
 
 extern std::vector<HoverEvent> hover_events;
 void new_hover_event(
-  std::vector<HoverEvent>& container,
+  std::vector<ClickEvent>& container,
   std::string id,
+  std::function<void(MenuData&)> on_function,
+  std::function<void(MenuData&)> off_function,
   sf::FloatRect bounds,
-  UIComponent* component = nullptr,
-  sf::View view = default_view
+  UIComponent* component,
+  sf::View view
 );
 
 struct FocusEvent : UIEvent {
@@ -467,6 +488,10 @@ class UIComponent {
 
     virtual void off_hover() {
       m_hover = false;
+    }
+
+    virtual void set_z_index(int new_z_index) {
+      z_index = new_z_index;
     }
 
     UIComponent(std::string id, bool hidden = false)

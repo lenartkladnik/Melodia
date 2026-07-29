@@ -80,7 +80,7 @@ extern const sf::Color background_color({227, 219, 211}); //({196, 186, 189});
 extern const sf::Color dark_background_color({background_color.r - 5, background_color.g - 5, background_color.b - 5}); // ({156, 146, 149});
 extern const sf::Color light_background_color({0, 0, 0, 10});
 extern const sf::Color lighter_background_color({0, 0, 0, 5});
-extern const sf::Color background_shadow_color({background_color.r - 10, background_color.g - 10, background_color.b - 10}); // ({176, 166, 169});
+extern const sf::Color background_shadow_color({background_color.r - 20, background_color.g - 20, background_color.b - 20}); // ({176, 166, 169});
 extern const sf::Color dark_background_shadow_color({dark_background_color.r - 10, dark_background_color.g - 10, dark_background_color.b - 10}); // ({153, 144, 147});
 extern const sf::Color background_shadow_color_transparent({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
 extern const sf::Color dark_background_shadow_color_transparent({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
@@ -104,6 +104,7 @@ sf::Font default_font;
 
 bool held_left_mb_down = false;
 std::vector<int> search_results = {};
+int dragging_search_result = -1;
 std::string progress_bar_string = "";
 std::string progress_bar_doing_string = "";
 float progress_bar_amount = 0.f;
@@ -119,6 +120,9 @@ bool search_was_active = false;
 
 std::vector<ClickEvent> click_events;
 std::vector<ClickEvent> search_res_click_events;
+
+std::vector<ReleaseEvent> release_events;
+std::vector<ReleaseEvent> search_res_release_events;
 
 std::vector<HoverEvent> hover_events;
 
@@ -165,10 +169,16 @@ void new_click_event(std::vector<ClickEvent>& container, std::string id, std::fu
   container.push_back(ClickEvent{{std::move(id), bounds, view, component}, function, mouse_button});
 }
 
-void new_hover_event(std::vector<HoverEvent>& container, std::string id, sf::FloatRect bounds, UIComponent* component, sf::View view) {
+void new_release_event(std::vector<ReleaseEvent>& container, std::string id, std::function<void(MenuData&)> function, sf::Mouse::Button mouse_button, UIComponent* component) {
   for (const auto& each : container)
     if (each.id == id) return;
-  container.push_back(HoverEvent{{std::move(id), bounds, view, component}});
+  container.push_back(ReleaseEvent{{std::move(id), {}, {}, component}, function, mouse_button});
+}
+
+void new_hover_event(std::vector<HoverEvent>& container, std::string id, std::function<void(MenuData&)> on_function, std::function<void(MenuData&)> off_function, sf::FloatRect bounds, UIComponent* component, sf::View view) {
+  for (const auto& each : container)
+    if (each.id == id) return;
+  container.push_back(HoverEvent{{std::move(id), bounds, view, component}, on_function, off_function});
 }
 
 void new_focus_event(std::vector<FocusEvent>& container, std::string id, std::function<void(MenuData&, sf::Vector2f&)> function, std::function<void(MenuData&)> else_function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view) {
