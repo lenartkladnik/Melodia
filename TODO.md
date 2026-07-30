@@ -15,6 +15,7 @@
 - player UI breaks when resized
 - create necessary directories if they don't exist
 - gracefully handle exceptions
+- in the player menu queue a song cannot be placed at the very end of the queue when dragging
 
 # New features / changes
 

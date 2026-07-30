@@ -84,7 +84,7 @@ extern const sf::Color background_shadow_color({background_color.r - 20, backgro
 extern const sf::Color dark_background_shadow_color({dark_background_color.r - 10, dark_background_color.g - 10, dark_background_color.b - 10}); // ({153, 144, 147});
 extern const sf::Color background_shadow_color_transparent({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
 extern const sf::Color dark_background_shadow_color_transparent({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
-extern const sf::Color progress_color({212, 201, 204});
+extern const sf::Color progress_color({180, 180, 180});
 extern const sf::Color progress_done_color({32, 32, 32});
 extern const sf::Color text_color({10, 10, 10});
 extern const sf::Color cursor_color({40, 40, 40});

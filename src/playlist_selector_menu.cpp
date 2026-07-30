@@ -58,15 +58,9 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   );
   playlist_drop_area_background.setPosition(playlist_drop_area_gap);
   playlist_drop_area_background.setFillColor(lighter_background_color);
-
-  AreaComponent playlist_drop_area(
-    "playlist_drop_area",
-    playlist_drop_area_background.getGlobalBounds(),
-    [](MenuData&){}
-  );
-  playlist_drop_area.set_z_index(-1);
-
   window.draw(playlist_drop_area_background);
+
+  auto playlist_drop_area_bounds = playlist_drop_area_background.getGlobalBounds();
 
   // Favourites
   // TODO: Implement
@@ -95,7 +89,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
-      auto& cover_dt = data.drawables_cache.get_item(i, data.drawables_cache.name_to_z_index(i, "cover"));
+      auto& cover_dt = data.drawables_cache.get_item(i, data.drawables_cache.name_to_index(i, "cover"));
       if (cover_dt.drawformable->getGlobalBounds().contains(mouse_pos)) {
         // TODO: Hover effect
       }
@@ -192,7 +186,10 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       search_res_release_events.clear();
     }
 
-    sf::RoundedRectangleShape search_results_background({data.search->background_bounds().size.x, search_results_background_h + 10.f}, 8, main_n);
+    sf::RoundedRectangleShape search_results_background({
+      data.search->background_bounds().size.x,
+      search_results_background_h + 10.f
+    }, 8, main_n);
     search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y});
     search_results_background.setFillColor(light_background_color);
     search_results_background.setCornerRadii(std::array<float, 4>{
@@ -305,9 +302,30 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           search_res_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
         );
         new_release_event(search_res_release_events, "search_res_bounds_" + std::to_string(search_res_id),
-          [search_res_id](MenuData& menu_data) {
-            if (dragging_search_result == search_res_id)
+          [search_res_id, &window, playlist_drop_area_bounds](MenuData& menu_data) {
+            auto data = std::get<MenuData::PlaylistSelectorData>(menu_data.data).data;
+
+            if (dragging_search_result == search_res_id) {
               dragging_search_result = -1;
+
+              // Detect where it was dropped
+              auto dropped_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+              for (size_t i = 0; i < data->playlists.size(); i++) {
+                auto& background = data->drawables_cache.get_item(i, data->drawables_cache.name_to_index(i, "sel_background"));
+                auto background_bounds = background.drawformable->getGlobalBounds();
+
+                if (background_bounds.contains(dropped_pos)) {
+                  std::cout << "Add song to playlist '" << data->playlists[i] << "'\n";
+                  return;
+                }
+              }
+
+              if (playlist_drop_area_bounds.contains(dropped_pos)) {
+                std::cout << "Create new playlist\n";
+                return;
+              }
+            }
           },
           sf::Mouse::Button::Left, nullptr
         );

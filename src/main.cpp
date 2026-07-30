@@ -129,9 +129,9 @@ int main(int argc, char *argv[]) {
             playlist_sel.data->search->unfocus();
 
             // After the resize all items must be re-rendered
-          switch_to_playlist_selector(menu_data, window);
+            switch_to_playlist_selector(menu_data, window);
 
-          break;
+            break;
           }
         }
       }
