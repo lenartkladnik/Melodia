@@ -14,7 +14,7 @@ struct SmallSongContainerComponent {
   std::shared_ptr<sf::Texture> cover_tex;
 };
 
-std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int song_id, sf::Vector2f position, sf::Vector2f size);
+std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int song_id, sf::Vector2f position, sf::Vector2f size, bool dragging = false);
 void draw_small_song_container(std::shared_ptr<SmallSongContainerComponent> small_song_container);
 
 #endif

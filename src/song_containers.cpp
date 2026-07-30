@@ -2,7 +2,7 @@
 #include "include/song_containers.hpp"
 #include "../external/lib/RoundedRectangleShape.hpp"
 
-std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int song_id, sf::Vector2f position, sf::Vector2f size) {
+std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int song_id, sf::Vector2f position, sf::Vector2f size, bool dragging) {
   std::string song_path = base_music_path_data + std::to_string(song_id);
 
   auto cover_texture = std::make_shared<sf::Texture>(song_path + ".small.png");
@@ -28,7 +28,12 @@ std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int son
   artist->setPosition({title->getPosition().x, title->getPosition().y + 20.f});
 
   sf::RoundedRectangleShape background(size, 8, main_n);
-  background.setFillColor(background_shadow_color);
+  background.setFillColor(sf::Color{
+      background_shadow_color.r,
+      background_shadow_color.g,
+      background_shadow_color.b,
+      dragging ? 90 : background_shadow_color.a // Make the container slightly transparent when dragging
+  });
   background.setPosition({cover.getPosition().x - 5.f, cover.getPosition().y - 5.f});
 
   auto more = std::make_shared<sf::Text>(default_font, "...");

@@ -164,12 +164,24 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   if (playlist_sel.data->search->is_active() && playlist_sel.data->search->is_focused()) {
     search_was_active = true;
 
-    playlist_sel.data->search->background_set_corner_radii(std::array<float, 4>{
-      playlist_sel.data->search->background_get_corner_radius(0),
-      playlist_sel.data->search->background_get_corner_radius(1),
-      0.f,
-      0.f
-    });
+    float search_results_background_h = playlist_search_entry_unit * search_results.size();
+    // If there is a result being dragged remove the background
+    if (dragging_search_result != -1) {
+      search_results_background_h = 0;
+    }
+
+    // Only make the bottom corners not rounded if there are any search results
+    if (search_results_background_h != 0) {
+      playlist_sel.data->search->background_set_corner_radii(std::array<float, 4>{
+        playlist_sel.data->search->background_get_corner_radius(0),
+        playlist_sel.data->search->background_get_corner_radius(1),
+        0.f,
+        0.f
+      });
+    }
+    else {
+      playlist_sel.data->search->background_reset_corner_radii();
+    }
 
     can_search_string_scroll = true;
 
@@ -180,16 +192,17 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       search_res_release_events.clear();
     }
 
-    float search_results_background_h = playlist_search_entry_unit * search_results.size();
-    // If there is a result being dragged make the background one unit shorter
-    if (dragging_search_result != -1)
-      search_results_background_h -= playlist_search_entry_unit;
-
     sf::RoundedRectangleShape search_results_background({data.search->background_bounds().size.x, search_results_background_h + 10.f}, 8, main_n);
     search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y});
     search_results_background.setFillColor(light_background_color);
-    search_results_background.setCornerRadii(std::array<float, 4>{0.f, 0.f, search_results_background.getCornersRadius(2), search_results_background.getCornersRadius(3)});
+    search_results_background.setCornerRadii(std::array<float, 4>{
+      0.f,
+      0.f,
+      search_results_background.getCornersRadius(2),
+      search_results_background.getCornersRadius(3)
+    });
 
+    // On click on this area refocus search if it was just focused
     AreaComponent search_res_area(
       "search_res_area",
       search_results_background.getGlobalBounds(),
@@ -202,8 +215,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
 
-
-    window.draw(search_results_background);
+    if (search_results_background_h != 0)
+      window.draw(search_results_background);
 
     // Show search results
 
@@ -237,14 +250,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     auto search_results_before = search_results;
 
-    if (dragging_search_result != -1) {
-      auto dragging_search_result_it = std::find(search_results.begin(), search_results.end(), dragging_search_result);
-      if (dragging_search_result_it != search_results.end()) {
-        search_results.erase(dragging_search_result_it);
-        search_results.emplace_back(dragging_search_result);
-      }
-    }
-
     for (const int& search_res_id : search_results) {
       last_y_pos = (playlist_search_entry_height + 10.f) * idx + 10.f;
 
@@ -253,6 +258,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         playlist_search_entry_height + 5.f
       );
 
+      // Place the song container on the mouse if it is dragged otherwise normal
       sf::Vector2f search_result_pos;
       if (search_res_id == dragging_search_result) {
         window.setView(window.getDefaultView());
@@ -267,7 +273,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       auto search_result = create_small_song_container(
         search_res_id,
         search_result_pos,
-        search_result_size
+        search_result_size,
+        search_res_id == dragging_search_result
       );
 
       draw_small_song_container(search_result);

@@ -138,42 +138,42 @@ int main(int argc, char *argv[]) {
 
       if (!pause_main_input_handling) {
         on<sf::Event::MouseWheelScrolled>(*event, scroll_events,
-          [&](const auto* e, const auto& item) { return item.can_scroll; },
-          [&](const auto* e, const auto* item) { item->scroll_offset -= e->delta * scroll_speed; },
-          [](const auto*, const auto*){}
+          [&](const auto* e, auto& item) { return item.can_scroll; },
+          [&](const auto* e, auto* item) { item->scroll_offset -= e->delta * scroll_speed; },
+          [](const auto*, auto*){}
         );
 
         on<sf::Event::MouseButtonPressed>(*event, click_events,
-          [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
-          [&](const auto* e, const auto* item) {
+          [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
+          [&](const auto* e, auto* item) {
             item->function(menu_data);
           },
-          [&](const auto* e, const auto* item) {
+          [&](const auto* e, auto* item) {
             if (item->component)
               item->component->unfocus();
           }
         );
 
         on_anywhere<sf::Event::MouseButtonReleased>(*event, release_events,
-          [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
-          [&](const auto* e, const auto* item) {
+          [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
+          [&](const auto* e, auto* item) {
             item->function(menu_data);
           }
         );
 
 
         on<sf::Event::MouseButtonPressed>(*event, focus_events,
-          [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
-          [&](const auto* e, const auto* item) {
+          [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
+          [&](const auto* e, auto* item) {
             auto pos = window.mapPixelToCoords(e->position, item->view);
             item->function(menu_data, pos);
           },
-          [](const auto*, const auto*){}
+          [](const auto*, auto*){}
         );
 
         on_anywhere<sf::Event::TextEntered>(*event, text_events,
-          [&](const auto* e, const auto& item) { return item.input_component->is_active() && !item.input_component->is_hidden() && item.input_component->is_focused(); },
-          [&](const auto* e, const auto* item) { item->input_component->write_input(e->unicode); }
+          [&](const auto* e, auto& item) { return item.input_component->is_active() && !item.input_component->is_hidden() && item.input_component->is_focused(); },
+          [&](const auto* e, auto* item) { item->input_component->write_input(e->unicode); }
         );
       }
 

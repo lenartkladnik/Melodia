@@ -209,8 +209,8 @@ void new_focus_event(
 );
 
 struct ScrollEvent : UIEvent {
-  float& scroll_offset;
-  bool& can_scroll;
+  float scroll_offset;
+  bool can_scroll;
 };
 
 extern std::vector<ScrollEvent> scroll_events;
@@ -1036,6 +1036,10 @@ class AreaComponent : public UIComponent {
     }
 
     ~AreaComponent() = default;
+
+    sf::FloatRect get_bounds() {
+      return m_bounds;
+    }
 };
 
 struct StaticPlayerData {

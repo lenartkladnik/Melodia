@@ -9,10 +9,10 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   const auto* e = event.getIf<TEvent>();
   if (!e) return;
 
-  const typename TContainer::value_type* best_item = nullptr;
+  typename TContainer::value_type* best_item = nullptr;
   int max_z_index = std::numeric_limits<int>::min();
 
-  for (const auto& item : items) {
+  for (auto& item : items) {
     if (item.bounds.contains(window.mapPixelToCoords(e->position, item.view)) && predicate(e, item)) {
       if (item.component) {
         if (!item.component->is_hidden() && (item.component->z_index > max_z_index)) {
@@ -30,7 +30,7 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   }
 
   // handle best item and unfocus all other items
-  for (const auto& item : items) {
+  for (auto& item : items) {
     if (&item == best_item)
       handle(e, best_item);
 
@@ -43,7 +43,7 @@ template<typename TEvent, typename TContainer, typename TPredicate, typename THa
 void on_anywhere(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle) {
   const auto* e = event.getIf<TEvent>();
   if (!e) return;
-  for (const auto& item : items) {
+  for (auto& item : items) {
     if (item.component) {
       if (!item.component->is_hidden() && predicate(e, item))
         handle(e, &item);
