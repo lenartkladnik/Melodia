@@ -7,9 +7,11 @@
 #include "../external/lib/RoundedRectangleShape.hpp"
 #include "include/data.hpp"
 #include "include/player_menu.hpp"
+#include "include/playlist_selector_menu.hpp"
 #include "include/download.hpp"
 #include "include/utils.hpp"
 #include "include/song_containers.hpp"
+#include "include/storage_handler.hpp"
 
 std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
   reset_globals();
@@ -306,8 +308,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
             auto data = std::get<MenuData::PlaylistSelectorData>(menu_data.data).data;
 
             if (dragging_search_result == search_res_id) {
-              dragging_search_result = -1;
-
               // Detect where it was dropped
               auto dropped_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
@@ -316,15 +316,18 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
                 auto background_bounds = background.drawformable->getGlobalBounds();
 
                 if (background_bounds.contains(dropped_pos)) {
-                  std::cout << "Add song to playlist '" << data->playlists[i] << "'\n";
+                  add_to_playlist(data->playlists[i], dragging_search_result);
                   return;
                 }
               }
 
               if (playlist_drop_area_bounds.contains(dropped_pos)) {
-                std::cout << "Create new playlist\n";
+                create_new_playlist(dragging_search_result);
                 return;
               }
+
+              dragging_search_result = -1;
+              switch_to_playlist_selector(menu_data, window);
             }
           },
           sf::Mouse::Button::Left, nullptr

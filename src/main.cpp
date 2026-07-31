@@ -8,10 +8,14 @@
 #include "include/data.hpp"
 #include "include/animation.hpp"
 #include "include/events.hpp"
+#include "include/storage_handler.hpp"
 
 using namespace sf;
 
 int main(int argc, char *argv[]) {
+  if (!ensure_storage())
+    return 1;
+
   // Load some assets
 
   sf::Image icon;

@@ -1,5 +1,6 @@
 #include "include/data.hpp"
 #include "include/song_containers.hpp"
+#include "include/storage_handler.hpp"
 #include "../external/lib/RoundedRectangleShape.hpp"
 
 std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int song_id, sf::Vector2f position, sf::Vector2f size, bool dragging) {

@@ -14,6 +14,7 @@
 #include <array>
 #include <unordered_map>
 #include <sys/stat.h>
+#include "include/storage_handler.hpp"
 #include "include/data.hpp"
 
 #ifdef _WIN32
@@ -40,13 +41,6 @@ extern const float slider_threshold = 0.015;
 extern const float queue_cover_size = 100.f;
 extern const float selector_cover_size = 200.f;
 extern const sf::Vector2f selector_size = {350.f, selector_cover_size};
-extern const std::string base_path = "./";
-extern const std::string base_path_misc = base_path + "misc/";
-extern const std::string base_path_external = base_path + "external/";
-extern const std::string base_path_external_prog = base_path_external + "prog/";
-extern const std::string base_music_path = ".music_data/";
-extern const std::string base_music_path_data = base_music_path + "data/";
-extern const std::string base_music_path_playlists = base_music_path + "playlists/";
 extern const int queue_items = 6;
 extern const float move_speed = 20.f;
 extern const float match_diff = 3.f;

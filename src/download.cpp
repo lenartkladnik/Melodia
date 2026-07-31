@@ -4,6 +4,7 @@
 #include "../external/lib/httplib.h"
 #include "../external/lib/nlohmann/json.hpp"
 #include "include/data.hpp"
+#include "include/storage_handler.hpp"
 
 #ifndef _WIN32
   #define STB_IMAGE_IMPLEMENTATION

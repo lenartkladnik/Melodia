@@ -15,6 +15,7 @@ temp_dist_dir = "dist/temp"
 build_jobs = 4
 use_system_sfml = (target == "linux")
 
+# When adding new files you only have to add the .cpp file path here
 sources = [
     f"src/{main_path}",
     "src/data.cpp",
@@ -23,6 +24,7 @@ sources = [
     "src/animation.cpp",
     "src/download.cpp",
     "src/utils.cpp",
+    "src/storage_handler.cpp",
     "src/song_containers.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]

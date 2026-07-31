@@ -1,6 +1,20 @@
 #ifndef STORAGE_HANDLER_HPP
 #define STORAGE_HANDLER_HPP
 
-void ensure_storage();
+extern const std::string base_path;
+extern const std::string base_path_misc;
+extern const std::string base_path_external;
+extern const std::string base_path_external_prog;
+extern const std::string base_music_path;
+extern const std::string base_music_path_data;
+extern const std::string base_music_path_playlists;
+extern const std::string path_counter_prefix;
+
+bool ensure_storage();
+void remove_playlist(std::string playlist);
+std::string create_new_playlist(int song_id);
+std::string rename_playlist(std::string old_playlist, std::string new_playlist);
+void add_to_playlist(std::string playlist, int song_id);
+void remove_from_playlist(std::string playlist, int song_id);
 
 #endif
