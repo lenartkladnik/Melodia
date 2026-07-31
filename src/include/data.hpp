@@ -8,8 +8,11 @@
 #include <thread>
 #include <unordered_map>
 #include "../../external/lib/RoundedRectangleShape.hpp"
+#include "utils.hpp"
 
 // Constants
+
+extern const int ON_TOP;
 
 extern const float padding_top;
 extern const float offset;
@@ -71,6 +74,7 @@ extern const sf::Color lighter_text_color;
 extern const sf::Color white_color;
 extern const sf::Color title_color;
 extern const sf::Color artist_color;
+extern const sf::Color selection_color;
 
 extern const sf::Color hover_sub;
 
@@ -533,21 +537,103 @@ class InputComponent : public UIComponent {
     float corner_radius;
     sf::RoundedRectangleShape input_background;
     sf::RoundedRectangleShape input_shadow;
-    sf::Text input_before_cursor;
-    sf::Text input_after_cursor;
+    sf::Text input_text;
     std::shared_ptr<sf::Texture> action_button_tex;
     std::optional<sf::Sprite> action_button;
+    size_t selection_start = std::string::npos;
+    size_t selection_count = 0;
+    sf::RoundedRectangleShape selection_background;
 
   public:
+    InputComponent(
+      sf::RenderWindow& render_window,
+      std::string id,
+      sf::Vector2f input_size,
+      sf::Vector2f input_pos,
+      std::string prompt,
+      std::shared_ptr<sf::Texture> action_tex,
+      std::function<void(MenuData&)> action_function,
+      float corner_radius = 20,
+      bool hidden = false
+    )
+      : UIComponent(id, hidden),
+        window(render_window),
+        input_prompt(prompt),
+        corner_radius(corner_radius),
+        input_text(default_font, prompt, 20)
+
+    {
+      if (action_tex) {
+        action_button_tex = action_tex;
+        action_button.emplace(*action_button_tex);
+      }
+
+      input_string = "";
+      cursor_pos = 0;
+
+      input_background.setSize(input_size);
+      input_background.setCornerPointCount(main_n);
+      input_background.setPosition(input_pos);
+      input_background.setFillColor(light_background_color);
+      background_reset_corner_radii();
+
+      input_shadow.setSize({input_background.getGlobalBounds().size.x + 5.f, input_background.getGlobalBounds().size.y + 5.f});
+      input_shadow.setCornersRadius(corner_radius);
+      input_shadow.setCornerPointCount(main_n);
+      input_shadow.setPosition({input_background.getPosition().x - 2.5f, input_background.getPosition().y + 3.f});
+      input_shadow.setFillColor(dark_main_color);
+
+      input_text.setFillColor(light_text_color);
+      setFontSize(input_text, medium_font_size);
+      input_text.setPosition({input_background.getPosition().x + 16.f, input_background.getPosition().y + input_text.getGlobalBounds().size.y - 2.5});
+
+      if (action_button) {
+        action_button->setPosition({
+          input_background.getPosition().x + input_background.getGlobalBounds().size.x - action_button->getGlobalBounds().size.x - 12.f,
+          input_background.getPosition().y + 5.f
+        });
+
+        register_action(action_function);
+      }
+
+      selection_background.setFillColor(selection_color);
+      selection_background.setCornerPointCount(main_n);
+      selection_background.setCornersRadius(2);
+
+      new_focus_event(focus_events, id,
+        [this](MenuData& menu_data, sf::Vector2f pos) {
+          if (!this->is_hidden())
+            this->focus(pos);
+        },
+        [this](MenuData& menu_data) {
+          this->unfocus();
+        },
+        input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
+
+      new_text_event(text_events, id, this, this);
+    }
+
+    InputComponent() = delete;
+    ~InputComponent() = default;
+
+    // Disallow copy
+    InputComponent(const InputComponent&) = delete;
+    InputComponent& operator=(const InputComponent&) = delete;
+
+    // Disallow move
+    InputComponent(InputComponent&&) = delete;
+    InputComponent& operator=(InputComponent&&) = delete;
+
     void draw() override {
       if (!this->is_hidden()) {
         window.draw(input_background);
-        window.draw(input_before_cursor);
-        window.draw(input_after_cursor);
+        window.draw(input_text);
         if (action_button)
           window.draw(*action_button);
         if (show_cursor)
           this->draw_cursor();
+        if (selection_start != std::string::npos)
+          this->draw_selection();
       }
     }
 
@@ -580,8 +666,7 @@ class InputComponent : public UIComponent {
         show_cursor = !show_cursor;
       }
 
-      input_before_cursor.setString(input_string.substr(0, cursor_pos));
-      input_after_cursor.setString(input_string.substr(cursor_pos));
+      input_text.setString(input_string);
     }
 
     void write_input(char32_t input) {
@@ -613,31 +698,26 @@ class InputComponent : public UIComponent {
     void focus(const sf::Vector2f& pos) {
       this->m_focused = true;
 
-      input_before_cursor.setFillColor(text_color);
+      input_active = true;
 
-      if (input_active) {
-        if (input_string.empty()) {
-          cursor_pos = 0;
-        }
-        else {
-          auto relative_before_cursor = (pos.x - input_before_cursor.getPosition().x);
-          auto c_pos = round(relative_before_cursor / (input_before_cursor.getGlobalBounds().size.x + input_after_cursor.getGlobalBounds().size.x) * input_string.size());
+      input_text.setFillColor(text_color);
 
-          // Keep cursor solid while changing cursor pos
-          this->reset_cursor();
-
-          if (c_pos > input_string.size()) {
-            cursor_pos = input_string.size();
-          }
-          else {
-            cursor_pos = c_pos;
-          }
-        }
+      if (input_string.empty()) {
+        cursor_pos = 0;
       }
       else {
-        input_active = true;
-        input_before_cursor.setString(input_string.substr(0, cursor_pos));
-        input_after_cursor.setString(input_string.substr(cursor_pos));
+        cursor_pos = -1;
+        for (int i = 0; i < input_string.size(); i++) {
+          if (find_character_pos(input_text, i).x + (find_character_size(input_text, i).x / 2) > pos.x) {
+            cursor_pos = i;
+            break;
+          }
+        }
+        if (cursor_pos == -1)
+          cursor_pos = input_string.size();
+
+        // Keep cursor solid while changing cursor pos
+        this->reset_cursor();
       }
     }
 
@@ -648,10 +728,33 @@ class InputComponent : public UIComponent {
       show_cursor = false;
 
       if (input_string.size() == 0) {
-        input_after_cursor.setFillColor(text_color);
-        input_before_cursor.setFillColor(light_text_color);
-        input_before_cursor.setString(input_prompt);
+        input_text.setFillColor(light_text_color);
+        input_text.setString(input_prompt);
       }
+    }
+
+    void select(size_t start, int count) {
+      if (count >= 0) {
+        selection_start = start;
+        selection_count = (size_t)count;
+      } else {
+        // Selecting backwards
+        selection_start = start + count;
+        selection_count = (size_t)(-count);
+      }
+    }
+
+    void deselect() {
+      selection_start = std::string::npos;
+    }
+
+    void draw_selection() {
+      auto start = find_character_pos(input_text, selection_start);
+      auto end = find_character_pos(input_text, selection_start + selection_count);
+      selection_background.setPosition(start);
+      selection_background.setSize({end.x - start.x, input_text.getGlobalBounds().size.y});
+
+      window.draw(selection_background);
     }
 
     bool is_text_too_long() {
@@ -661,12 +764,11 @@ class InputComponent : public UIComponent {
         action_button_size_x = action_button.value().getGlobalBounds().size.x + 10.f; // + 10 so the text and action_button aren't touching
       }
 
-      return (
-        input_before_cursor.getGlobalBounds().size.x +
-        input_after_cursor.getGlobalBounds().size.x) // Full size of the text
+      return
+        input_text.getGlobalBounds().size.x
         >
         input_background.getGlobalBounds().size.x -
-        (input_before_cursor.getPosition().x - input_background.getPosition().x) - // Subtract the offset of the text at the start
+        (input_text.getPosition().x - input_background.getPosition().x) - // Subtract the offset of the text at the start
         action_button_size_x; // Subtract the size of the action button
     }
 
@@ -702,7 +804,7 @@ class InputComponent : public UIComponent {
 
     void draw_cursor() {
       sf::RectangleShape cursor({1.2, input_background.getGlobalBounds().size.y - 15.f});
-      cursor.setPosition({input_before_cursor.getPosition().x + 2.f + input_before_cursor.getGlobalBounds().size.x, input_background.getPosition().y + 6.f}); // input_before_cursor.getPosition().y + 1.f});
+      cursor.setPosition({find_character_pos(input_text, cursor_pos).x, input_background.getPosition().y + 6.f});
       cursor.setFillColor(cursor_color);
       window.draw(cursor);
     }
@@ -748,87 +850,6 @@ class InputComponent : public UIComponent {
         }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
       }
     }
-
-    InputComponent(
-      sf::RenderWindow& render_window,
-      std::string id,
-      sf::Vector2f input_size,
-      sf::Vector2f input_pos,
-      std::string prompt,
-      std::shared_ptr<sf::Texture> action_tex,
-      std::function<void(MenuData&)> action_function,
-      float corner_radius = 20,
-      bool hidden = false
-    )
-      : UIComponent(id, hidden),
-        window(render_window),
-        input_prompt(prompt),
-        corner_radius(corner_radius),
-        input_before_cursor(default_font, prompt, 20),
-        input_after_cursor(default_font, "", 20)
-
-    {
-      if (action_tex) {
-        action_button_tex = action_tex;
-        action_button.emplace(*action_button_tex);
-      }
-
-      input_string = "";
-      cursor_pos = 0;
-
-      input_background.setSize(input_size);
-      input_background.setCornerPointCount(main_n);
-      input_background.setPosition(input_pos);
-      input_background.setFillColor(light_background_color);
-      background_reset_corner_radii();
-
-      input_shadow.setSize({input_background.getGlobalBounds().size.x + 5.f, input_background.getGlobalBounds().size.y + 5.f});
-      input_shadow.setCornersRadius(corner_radius);
-      input_shadow.setCornerPointCount(main_n);
-      input_shadow.setPosition({input_background.getPosition().x - 2.5f, input_background.getPosition().y + 3.f});
-      input_shadow.setFillColor(dark_main_color);
-
-      input_before_cursor.setFillColor(light_text_color);
-      setFontSize(input_before_cursor, medium_font_size);
-      input_before_cursor.setPosition({input_background.getPosition().x + 16.f, input_background.getPosition().y + input_before_cursor.getGlobalBounds().size.y - 2.5});
-
-      input_after_cursor.setFillColor(text_color);
-      setFontSize(input_after_cursor, medium_font_size);
-      input_after_cursor.setPosition(input_before_cursor.getPosition());
-
-      if (action_button) {
-        action_button->setPosition({
-          input_background.getPosition().x + input_background.getGlobalBounds().size.x - action_button->getGlobalBounds().size.x - 12.f,
-          input_background.getPosition().y + 5.f
-        });
-
-        register_action(action_function);
-      }
-
-      new_focus_event(focus_events, id,
-        [this](MenuData& menu_data, sf::Vector2f pos) {
-          if (!this->is_hidden())
-            this->focus(pos);
-        },
-        [this](MenuData& menu_data) {
-          this->unfocus();
-        },
-        input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
-
-      new_text_event(text_events, id, this, this);
-    }
-
-
-  InputComponent() = delete;
-  ~InputComponent() = default;
-
-  // Disallow copy
-  InputComponent(const InputComponent&) = delete;
-  InputComponent& operator=(const InputComponent&) = delete;
-
-  // Disallow move
-  InputComponent(InputComponent&&) = delete;
-  InputComponent& operator=(InputComponent&&) = delete;
 };
 
 class ButtonComponent : public UIComponent {

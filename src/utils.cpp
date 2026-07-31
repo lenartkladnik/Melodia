@@ -71,3 +71,35 @@ std::string get_next_available_path(std::string path) {
 
   return new_path;
 }
+
+// Adapted from https://www.sfml-dev.org/tutorials/3.1/migration/sfml-3.0/#character-positions-in-text
+sf::Vector2f find_character_pos(const sf::Text& text, size_t index) {
+  const auto& glyphs = text.getShapedGlyphs();
+  if (glyphs.empty())
+    return text.getTransform().transformPoint({});
+
+  for (const auto& g : glyphs) {
+    if (g.cluster == index)
+      return text.getTransform().transformPoint(g.position);
+  }
+
+  return {text.getPosition().x + text.getGlobalBounds().size.x, text.getPosition().y + text.getGlobalBounds().size.y}; // Very end of the string
+}
+
+sf::Vector2f find_character_size(const sf::Text& text, size_t index) {
+  const auto& glyphs = text.getShapedGlyphs();
+  if (glyphs.empty())
+    return {0.f, 0.f};
+
+  float width = 0.f;
+  float height = 0.f;
+  for (const auto& g : glyphs) {
+    if (g.cluster == index) {
+      width += g.glyph.bounds.size.x;
+      if (g.glyph.bounds.size.y > height)
+        height = g.glyph.bounds.size.y;
+    }
+  }
+
+  return {width, height};
+}

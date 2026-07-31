@@ -211,7 +211,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->focus({-1, -1}); // {-1, -1} since the position won't be changed anyway
       },
       false,
-      999 // Should stay always on top
+      ON_TOP
     );
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);

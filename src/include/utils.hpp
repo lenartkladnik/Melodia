@@ -13,5 +13,7 @@ bool must_exist(std::string path);
 std::string get_stem(std::string path);
 std::string insert_in_stem(std::string path, std::string s);
 std::string get_next_available_path(std::string path);
+sf::Vector2f find_character_pos(const sf::Text& text, size_t index);
+sf::Vector2f find_character_size(const sf::Text& text, size_t index);
 
 #endif

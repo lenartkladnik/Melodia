@@ -25,6 +25,8 @@
   #define PCLOSE pclose
 #endif
 
+extern const int ON_TOP = 999;
+
 extern const float padding_top = 100.f;
 extern const float offset = 50.f;
 extern const int in_round = 8;
@@ -87,6 +89,7 @@ extern const sf::Color lighter_text_color({120, 120, 120});
 extern const sf::Color white_color({212, 212, 212});
 extern const sf::Color title_color = text_color;
 extern const sf::Color artist_color = light_text_color;
+extern const sf::Color selection_color({42, 42, 42, 10});
 
 extern const sf::Color hover_sub({20, 20, 20}); // TODO: Replace this with int since sf::Color - sf::Color doesn't work
 
