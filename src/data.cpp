@@ -169,39 +169,39 @@ void _handle_duplicates(T& v, std::string& id) {
   }
 }
 
-void new_click_event(std::vector<ClickEvent>& container, std::string id, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view) {
+void new_click_event(std::vector<ClickEvent>& container, std::string id, std::function<void(MenuData&)> function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(ClickEvent{{std::move(id), bounds, view, component}, function, mouse_button});
+  container.push_back(ClickEvent{{std::move(id), bounds, view, component, rank}, function, mouse_button});
 }
 
-void new_release_event(std::vector<ReleaseEvent>& container, std::string id, std::function<void(MenuData&)> function, sf::Mouse::Button mouse_button, UIComponent* component) {
+void new_release_event(std::vector<ReleaseEvent>& container, std::string id, std::function<void(MenuData&)> function, sf::Mouse::Button mouse_button, UIComponent* component, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(ReleaseEvent{{std::move(id), {}, {}, component}, function, mouse_button});
+  container.push_back(ReleaseEvent{{std::move(id), {}, {}, component, rank}, function, mouse_button});
 }
 
-void new_hover_event(std::vector<HoverEvent>& container, std::string id, std::function<void(MenuData&)> on_function, std::function<void(MenuData&)> off_function, sf::FloatRect bounds, UIComponent* component, sf::View view) {
+void new_hover_event(std::vector<HoverEvent>& container, std::string id, std::function<void(MenuData&)> on_function, std::function<void(MenuData&)> off_function, sf::FloatRect bounds, UIComponent* component, sf::View view, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(HoverEvent{{std::move(id), bounds, view, component}, on_function, off_function});
+  container.push_back(HoverEvent{{std::move(id), bounds, view, component, rank}, on_function, off_function});
 }
 
-void new_focus_event(std::vector<FocusEvent>& container, std::string id, std::function<void(MenuData&, sf::Vector2f&)> function, std::function<void(MenuData&)> else_function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view) {
+void new_focus_event(std::vector<FocusEvent>& container, std::string id, std::function<void(MenuData&, sf::Vector2f&)> function, std::function<void(MenuData&)> else_function, sf::FloatRect bounds, sf::Mouse::Button mouse_button, UIComponent* component, sf::View view, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(FocusEvent{{std::move(id), bounds, view, component}, function, else_function, mouse_button});
+  container.push_back(FocusEvent{{std::move(id), bounds, view, component, rank}, function, else_function, mouse_button});
 }
 
-void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll, UIComponent* component) {
+void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll, UIComponent* component, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(ScrollEvent{{std::move(id), bounds, default_view, component}, scroll_offset, can_scroll});
+  container.push_back(ScrollEvent{{std::move(id), bounds, default_view, component, rank}, scroll_offset, can_scroll});
 }
 
-void new_text_event(std::vector<TextEvent>& container, std::string id, InputComponent* input_component, UIComponent* component) {
+void new_text_event(std::vector<TextEvent>& container, std::string id, InputComponent* input_component, UIComponent* component, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(TextEvent{{std::move(id), {}, {}, component}, input_component});
+  container.push_back(TextEvent{{std::move(id), {}, {}, component, rank}, input_component});
 }
 
-void new_kb_event(std::vector<KbEvent>& container, std::string id, UIComponent* component) {
+void new_kb_event(std::vector<KbEvent>& container, std::string id, UIComponent* component, int rank) {
   _handle_duplicates(container, id);
-  container.push_back(KbEvent{{std::move(id), {}, {}, component}});
+  container.push_back(KbEvent{{std::move(id), {}, {}, component, rank}});
 }
 
 std::string construct_song_path(int id) {

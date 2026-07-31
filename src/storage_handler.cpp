@@ -66,7 +66,7 @@ std::string rename_playlist(std::string old_playlist, std::string new_playlist) 
 }
 
 void add_to_playlist(std::string playlist, int song_id) {
-  std::ofstream playlist_file(base_music_path_playlists + playlist);
+  std::ofstream playlist_file(base_music_path_playlists + playlist, std::ios_base::app);
   playlist_file << song_id << "\n";
   playlist_file.close();
 }

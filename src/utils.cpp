@@ -51,7 +51,7 @@ std::string insert_in_stem(std::string path, std::string s) {
   size_t insert_at = path.size();
 
   auto last_dot = path.find_last_of('.');
-  if (last_dot != std::string::npos) { // Has extension
+  if (last_dot != std::string::npos && last_dot > path.find_last_of('/')) { // Has extension
     insert_at = last_dot;
   }
 
@@ -67,7 +67,7 @@ std::string get_next_available_path(std::string path) {
   do {
     new_path = insert_in_stem(path, path_counter_prefix + std::to_string(i));
     i++;
-  } while (!std::filesystem::exists(new_path));
+  } while (std::filesystem::exists(new_path));
 
   return new_path;
 }

@@ -126,13 +126,15 @@ enum class AnimationStage {
 
 class UIComponent; // Forward declare UIComponent so the events can use it
 
-class MenuData; // Forward declare MenuData so ClickEvent can use it
+struct MenuData; // Forward declare MenuData so ClickEvent can use it
 
 struct UIEvent {
   std::string id;
   sf::FloatRect bounds;
   sf::View view = default_view;
   UIComponent* component = nullptr;
+  int rank = 0;
+  bool disabled = false;
 };
 
 struct ClickEvent : UIEvent {
@@ -149,7 +151,8 @@ void new_click_event(
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,
-  sf::View view = default_view
+  sf::View view = default_view,
+  int rank = 0
 );
 
 struct ReleaseEvent : UIEvent {
@@ -164,7 +167,8 @@ void new_release_event(
   std::string id,
   std::function<void(MenuData&)> function,
   sf::Mouse::Button mouse_button,
-  UIComponent* component = nullptr
+  UIComponent* component = nullptr,
+  int rank = 0
 );
 
 struct HoverEvent : UIEvent {
@@ -180,7 +184,8 @@ void new_hover_event(
   std::function<void(MenuData&)> off_function,
   sf::FloatRect bounds,
   UIComponent* component,
-  sf::View view
+  sf::View view = default_view,
+  int rank = 0
 );
 
 struct FocusEvent : UIEvent {
@@ -198,7 +203,8 @@ void new_focus_event(
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,
-  sf::View view = default_view
+  sf::View view = default_view,
+  int rank = 0
 );
 
 struct ScrollEvent : UIEvent {
@@ -213,7 +219,8 @@ void new_scroll_event(
   sf::FloatRect bounds,
   float& scroll_offset,
   bool& can_scroll,
-  UIComponent* component = nullptr
+  UIComponent* component = nullptr,
+  int rank = 0
 );
 
 class InputComponent; // Forward declare InputComponent so TextEvent can use it
@@ -223,13 +230,24 @@ struct TextEvent : UIEvent {
 };
 
 extern std::vector<TextEvent> text_events;
-void new_text_event(std::vector<TextEvent>& container, std::string id, InputComponent* input_component, UIComponent* component = nullptr);
+void new_text_event(
+  std::vector<TextEvent>& container,
+  std::string id,
+  InputComponent* input_component,
+  UIComponent* component = nullptr,
+  int rank = 0
+);
 
 
 struct KbEvent : UIEvent {};
 
 extern std::vector<KbEvent> kb_events;
-void new_kb_event(std::vector<KbEvent>& container, std::string id, UIComponent* component = nullptr);
+void new_kb_event(
+  std::vector<KbEvent>& container,
+  std::string id,
+  UIComponent* component = nullptr,
+  int rank = 0
+);
 
 // Adapted from:
 // https://en.sfml-dev.org/forums/index.php?topic=24133.0
@@ -1020,12 +1038,13 @@ class AreaComponent : public UIComponent {
       std::string id,
       sf::FloatRect bounds,
       std::function<void(MenuData&)> function,
-      bool permanent = true
+      bool permanent = true,
+      int rank = 0
     )
       : UIComponent(id),
       m_bounds(bounds)
     {
-      new_click_event(click_events, id, function, m_bounds, sf::Mouse::Button::Left, permanent ? this : nullptr);
+      new_click_event(click_events, id, function, m_bounds, sf::Mouse::Button::Left, permanent ? this : nullptr, default_view, rank);
     }
 
     ~AreaComponent() = default;
@@ -1125,7 +1144,7 @@ struct MenuData {
     bool is_valid = false; // This has to be set to true to signify that the struct is ready to be used (all necessary fields are set)
     std::shared_ptr<MusicPlayer> music = std::make_shared<MusicPlayer>();
     std::shared_ptr<StaticPlayerData> data;
-    int song_id; // Needs to be set manually
+    int song_id;
     int playing_song_id = -1;
     bool seeking = false;
     bool was_playing = false;
@@ -1134,7 +1153,7 @@ struct MenuData {
     int dragging_queue = -1;
     sf::Vector2f queue_play_pos;
     std::string song_path;
-    std::string playlist; // Needs to be set manually
+    std::string playlist;
     std::vector<int> queue;
     std::vector<int> past_queue;
     bool reset_cursor = true;

@@ -19,12 +19,9 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
           max_z_index = item.component->z_index;
           best_item = &item;
         }
-      } else {
-        // If no component is attached to the event simply default to a z_index of 0
-        if (max_z_index < 0) {
-          max_z_index = 0;
-          best_item = &item;
-        }
+      } else if (!item.disabled && (item.rank > max_z_index)) {
+        max_z_index = item.rank;
+        best_item = &item;
       }
     }
   }
@@ -47,7 +44,7 @@ void on_anywhere(const sf::Event& event, TContainer& items, TPredicate predicate
     if (item.component) {
       if (!item.component->is_hidden() && predicate(e, item))
         handle(e, &item);
-    } else if (predicate(e, item)) {
+    } else if (!item.disabled && predicate(e, item)) {
       handle(e, &item);
     }
   }

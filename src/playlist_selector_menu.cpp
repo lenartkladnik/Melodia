@@ -139,7 +139,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       sel_background->getPosition().y + 10.f
     });
 
-    auto playlist_size = std::make_shared<sf::Text>(default_font, "Items: " + std::to_string(get_playlist(data.playlists[i]).size()));
+    int item_count = get_playlist(data.playlists[i]).size();
+    auto playlist_size = std::make_shared<sf::Text>(default_font, std::to_string(item_count) + " item" + (item_count == 1 ? "" : "s"));
     playlist_size->setFillColor(light_text_color);
     setFontSize(*playlist_size, small_font_size);
     playlist_size->setPosition({
@@ -209,7 +210,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         if (search_was_active)
           std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->focus({-1, -1}); // {-1, -1} since the position won't be changed anyway
       },
-      false
+      false,
+      999 // Should stay always on top
     );
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
@@ -308,6 +310,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
             auto data = std::get<MenuData::PlaylistSelectorData>(menu_data.data).data;
 
             if (dragging_search_result == search_res_id) {
+              dragging_search_result = -1;
+
               // Detect where it was dropped
               auto dropped_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
@@ -316,18 +320,17 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
                 auto background_bounds = background.drawformable->getGlobalBounds();
 
                 if (background_bounds.contains(dropped_pos)) {
-                  add_to_playlist(data->playlists[i], dragging_search_result);
+                  add_to_playlist(data->playlists[i], search_res_id);
+                  switch_to_playlist_selector(menu_data, window);
                   return;
                 }
               }
 
               if (playlist_drop_area_bounds.contains(dropped_pos)) {
-                create_new_playlist(dragging_search_result);
+                create_new_playlist(search_res_id);
+                switch_to_playlist_selector(menu_data, window);
                 return;
               }
-
-              dragging_search_result = -1;
-              switch_to_playlist_selector(menu_data, window);
             }
           },
           sf::Mouse::Button::Left, nullptr
