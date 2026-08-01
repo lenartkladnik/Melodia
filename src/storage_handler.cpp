@@ -3,6 +3,8 @@
 #include <fstream>
 #include <cctype>
 #include <algorithm>
+#include <sys/stat.h>
+#include "include/data.hpp"
 #include "include/utils.hpp"
 
 extern const std::string base_path = "./";
@@ -84,4 +86,109 @@ void remove_from_playlist(std::string playlist, int song_id) {
   std::ofstream playlist_file_o(base_music_path_playlists + playlist);
   playlist_file_o << new_ids;
   playlist_file_o.close();
+}
+
+std::string construct_song_path(int id) {
+  return base_music_path_data + std::to_string(id);
+}
+
+std::string get_song_title(int id) {
+  auto song_path = construct_song_path(id);
+
+  std::ifstream title_file(song_path + ".title");
+  std::string title_string = "";
+  if (title_file.good()) {
+    std::getline(title_file, title_string);
+  } else {
+    std::cerr << "Error: Failed to read title from '" << song_path << ".title" << "'.";
+  }
+
+  return title_string;
+}
+
+std::string get_song_artist(int id) {
+  auto song_path = construct_song_path(id);
+
+  std::ifstream artist_file(song_path + ".artist");
+  std::string artist_string = "";
+  if (artist_file.good()) {
+    std::getline(artist_file, artist_string);
+  } else {
+    std::cerr << "Error: Failed to read artist name from '" << song_path << ".artist" << "'.";
+  }
+
+  return artist_string;
+}
+
+std::vector<std::string> get_all_playlists() {
+  std::vector<std::string> playlists;
+
+  struct stat s;
+  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_playlists)) {
+    auto path = entry.path();
+    auto str_path = path.string();
+
+    // First check that the path doesn't contain a dot, because the playlist files don't
+    // have an extension. Then check that the path is a file and not a directory.
+    if (path.filename().string().find(".") == std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
+      auto u8 = path.stem().u8string();
+      playlists.push_back(std::string(reinterpret_cast<const char*>(u8.c_str())));
+    }
+  }
+
+  return playlists;
+}
+
+std::vector<int> get_playlist(const std::string& name) {
+  std::vector<int> ids;
+  std::string entry;
+  std::ifstream playlist_file(base_music_path_playlists + name);
+
+  while (std::getline(playlist_file, entry)) {
+    int id = std::stoi(entry);
+
+    if (std::find(ids.begin(), ids.end(), id) == ids.end())
+      ids.push_back(id);
+  }
+
+  std::shuffle(ids.begin(), ids.end(), rand_generator);
+
+  return ids;
+}
+
+std::vector<int> search_all_songs(const std::string& query) {
+  std::vector<int> results;
+
+  struct stat s;
+  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_data)) {
+    auto path = entry.path();
+    auto str_path = path.string();
+
+    // First check that the path contains the .title extensions, since it is one of the
+    // extensions every song has. Then check that the path is a file and not a directory.
+    if (path.filename().string().find(".title") != std::string::npos && stat(str_path.c_str(), &s) == 0 && !(s.st_mode & S_IFDIR)) {
+      int id = -1;
+      try {
+        auto u8 = path.stem().u8string();
+        id = std::stoi(std::string(reinterpret_cast<const char*>(u8.c_str())));
+      } catch (const std::invalid_argument& e) {
+        std::cerr << e.what() << std::endl;
+      } catch (const std::out_of_range& e) {
+        std::cerr << e.what() << std::endl;
+      }
+
+      if (id >= 0) {
+        if (matching(query, get_song_title(id), match_diff)) {
+          results.push_back(id);
+          continue; // Don't bother matching the artist string
+        }
+
+        if (matching(query, get_song_artist(id), match_diff)) {
+          results.push_back(id);
+        }
+      }
+    }
+  }
+
+  return results;
 }

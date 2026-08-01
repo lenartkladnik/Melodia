@@ -11,6 +11,12 @@ struct AnimateThread {
   bool running;
 };
 
+enum class AnimationStage {
+  start,
+  half,
+  end,
+};
+
 std::vector<AnimateThread> animate_move_x_running;
 
 void animate_move_x(sf::Transformable& transformable, float target, float step, bool* flag = nullptr, bool set_flag_to = true, AnimationStage flag_stage = AnimationStage::end) {

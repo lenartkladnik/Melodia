@@ -11,4 +11,7 @@ void switch_to_player(MenuData& menu_data, std::string playlist);
 std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist);
 void display_player(MenuData::PlayerData& menu, sf::RenderWindow& window);
 
+void done_playing(std::vector<int>& playlist, std::vector<int>& past);
+int get_start_song(std::vector<int>& playlist);
+
 #endif

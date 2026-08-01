@@ -40,6 +40,11 @@
 - use setCenter to position elements
 - force resize aspect ratio
 
+## input
+
+### string
+- scroll when the string is longer than what can be displayed
+
 ## songs
 
 ### removing

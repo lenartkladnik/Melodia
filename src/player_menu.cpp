@@ -6,9 +6,13 @@
 #include <cmath>
 #include "../external/lib/RoundedRectangleShape.hpp"
 #include "include/data.hpp"
+#include "include/components.hpp"
 #include "include/animation.hpp"
 #include "include/playlist_selector_menu.hpp"
+#include "include/player_menu.hpp"
 #include "include/utils.hpp"
+#include "include/storage_handler.hpp"
+#include "include/events.hpp"
 
 std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist) {
   reset_globals();
@@ -537,7 +541,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       }
 
       // Calculate the apparent index of the dragging queue entry
-      auto relative_pos = (window.mapPixelToCoords(sf::Mouse::getPosition(window)).y - queue_entry_background.getGlobalBounds().size.y / 2) / player_data.queue_background.getGlobalBounds().size.y;
+      auto relative_pos = (get_mouse_pos(window).y - queue_entry_background.getGlobalBounds().size.y / 2) / player_data.queue_background.getGlobalBounds().size.y;
       if (relative_pos > 1) {
         std::cout << "TODO: Handle scrolling with dragging queue entry" << std::endl;
       }
@@ -598,7 +602,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       queue_cover.setPosition({
         10.f,
         player.dragging_queue == id ?
-          window.mapPixelToCoords(sf::Mouse::getPosition(window)).y - queue_entry_background.getGlobalBounds().size.y / 2:
+          get_mouse_pos(window).y - queue_entry_background.getGlobalBounds().size.y / 2:
           get_queue_entry_position(idx)
       });
 
@@ -669,7 +673,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
       // Hover checks
 
-      auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+      auto mouse_pos = get_mouse_pos(window);
 
       if (player.dragging_queue == -1) { // Only show hover effects when not dragging an item
         if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
@@ -797,4 +801,31 @@ void switch_to_player(MenuData& menu_data, std::string playlist) {
   pd.is_valid = true;
 
   pd.data = init_player(window, construct_song_path(pd.song_id), pd.song_id, playlist);
+}
+
+void done_playing(std::vector<int>& playlist, std::vector<int>& past) {
+  // pop the first element into id
+  int id = playlist[0];
+
+  past.push_back(id);
+  if (past.size() > queue_items) past.erase(past.begin());
+
+  playlist.erase(playlist.begin());
+
+  if (playlist.size() <= queue_items) {
+    playlist.push_back(id);
+  }
+  else {
+    std::uniform_int_distribution<> distr(1, playlist.size() - queue_items - 1);
+    playlist.insert(playlist.begin() + queue_items + distr(rand_generator), id); // Add queue_items to prevent the user from seeing the insertion
+  }
+}
+
+int get_start_song(std::vector<int>& playlist) {
+  std::uniform_int_distribution<> distr(0, playlist.size() - 1);
+
+  int id_idx = distr(rand_generator);
+  int id = playlist[id_idx];
+
+  return id;
 }

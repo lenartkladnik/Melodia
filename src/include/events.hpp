@@ -3,6 +3,9 @@
 
 #include <SFML/Window/Event.hpp>
 #include <limits>
+#include "data.hpp"
+
+class UIComponent; // Forward declare
 
 template<typename TEvent, typename TContainer, typename TPredicate, typename THandler, typename THandlerElse>
 void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle, THandlerElse handle_else) {
@@ -49,5 +52,126 @@ void on_anywhere(const sf::Event& event, TContainer& items, TPredicate predicate
     }
   }
 }
+
+struct UIEvent {
+  std::string id;
+  sf::FloatRect bounds;
+  sf::View view = default_view;
+  UIComponent* component = nullptr;
+  int rank = 0;
+  bool disabled = false;
+};
+
+struct ClickEvent : UIEvent {
+  std::function<void(MenuData&)> function;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<ClickEvent> click_events;
+extern std::vector<ClickEvent> search_res_click_events;
+void new_click_event(
+  std::vector<ClickEvent>& container,
+  std::string id,
+  std::function<void(MenuData&)> function,
+  sf::FloatRect bounds,
+  sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr,
+  sf::View view = default_view,
+  int rank = 0
+);
+
+struct ReleaseEvent : UIEvent {
+  std::function<void(MenuData&)> function;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<ReleaseEvent> release_events;
+extern std::vector<ReleaseEvent> search_res_release_events;
+void new_release_event(
+  std::vector<ReleaseEvent>& container,
+  std::string id,
+  std::function<void(MenuData&)> function,
+  sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr,
+  int rank = 0
+);
+
+struct HoverEvent : UIEvent {
+  std::function<void(MenuData&)> on_hover_function;
+  std::function<void(MenuData&)> off_hover_function;
+};
+
+extern std::vector<HoverEvent> hover_events;
+void new_hover_event(
+  std::vector<ClickEvent>& container,
+  std::string id,
+  std::function<void(MenuData&)> on_function,
+  std::function<void(MenuData&)> off_function,
+  sf::FloatRect bounds,
+  UIComponent* component,
+  sf::View view = default_view,
+  int rank = 0
+);
+
+struct FocusEvent : UIEvent {
+  std::function<void(MenuData&, sf::Vector2f&)> function;
+  std::function<void(MenuData&)> else_function;
+  sf::Mouse::Button mouse_button;
+};
+
+extern std::vector<FocusEvent> focus_events;
+void new_focus_event(
+  std::vector<FocusEvent>& container,
+  std::string id,
+  std::function<void(MenuData&, sf::Vector2f&)> function, // Will get called if the click is within bounds
+  std::function<void(MenuData&)> else_function, // Will get called if click is out of bounds
+  sf::FloatRect bounds,
+  sf::Mouse::Button mouse_button,
+  UIComponent* component = nullptr,
+  sf::View view = default_view,
+  int rank = 0
+);
+
+struct ScrollEvent : UIEvent {
+  float scroll_offset;
+  bool can_scroll;
+};
+
+extern std::vector<ScrollEvent> scroll_events;
+void new_scroll_event(
+  std::vector<ScrollEvent>& container,
+  std::string id,
+  sf::FloatRect bounds,
+  float& scroll_offset,
+  bool& can_scroll,
+  UIComponent* component = nullptr,
+  int rank = 0
+);
+
+class InputComponent; // Forward declare InputComponent so TextEvent can use it
+
+struct TextEvent : UIEvent {
+  InputComponent* input_component;
+};
+
+extern std::vector<TextEvent> text_events;
+void new_text_event(
+  std::vector<TextEvent>& container,
+  std::string id,
+  InputComponent* input_component,
+  UIComponent* component = nullptr,
+  int rank = 0
+);
+
+
+struct KbEvent : UIEvent {};
+
+extern std::vector<KbEvent> kb_events;
+void new_kb_event(
+  std::vector<KbEvent>& container,
+  std::string id,
+  UIComponent* component = nullptr,
+  int rank = 0
+);
 
 #endif

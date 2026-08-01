@@ -26,6 +26,9 @@ sources = [
     "src/utils.cpp",
     "src/storage_handler.cpp",
     "src/song_containers.cpp",
+    "src/signals.cpp",
+    "src/components.cpp",
+    "src/events.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]
 

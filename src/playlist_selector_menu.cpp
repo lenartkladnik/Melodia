@@ -6,6 +6,7 @@
 #include <thread>
 #include "../external/lib/RoundedRectangleShape.hpp"
 #include "include/data.hpp"
+#include "include/components.hpp"
 #include "include/player_menu.hpp"
 #include "include/playlist_selector_menu.hpp"
 #include "include/download.hpp"
@@ -89,7 +90,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     if (data.drawables_cache.contains(i)) { // Only draw if the cache has it
 
-      auto mouse_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+      auto mouse_pos = get_mouse_pos(window);
 
       auto& cover_dt = data.drawables_cache.get_item(i, data.drawables_cache.name_to_index(i, "cover"));
       if (cover_dt.drawformable->getGlobalBounds().contains(mouse_pos)) {
@@ -313,7 +314,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
               dragging_search_result = -1;
 
               // Detect where it was dropped
-              auto dropped_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+              auto dropped_pos = get_mouse_pos(window);
 
               for (size_t i = 0; i < data->playlists.size(); i++) {
                 auto& background = data->drawables_cache.get_item(i, data->drawables_cache.name_to_index(i, "sel_background"));

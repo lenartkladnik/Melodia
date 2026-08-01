@@ -4,6 +4,7 @@
 #include "../external/lib/httplib.h"
 #include "../external/lib/nlohmann/json.hpp"
 #include "include/data.hpp"
+#include "include/components.hpp"
 #include "include/storage_handler.hpp"
 
 #ifndef _WIN32

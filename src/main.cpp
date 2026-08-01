@@ -3,6 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <math.h>
+#include "include/components.hpp"
 #include "include/player_menu.hpp"
 #include "include/playlist_selector_menu.hpp"
 #include "include/data.hpp"
@@ -13,6 +14,8 @@
 using namespace sf;
 
 int main(int argc, char *argv[]) {
+  set_window(sf::State::Windowed);
+
   if (!ensure_storage())
     return 1;
 
@@ -90,10 +93,9 @@ int main(int argc, char *argv[]) {
 
   while (window.isOpen()) {
     while (const std::optional event = window.pollEvent()) {
-      if (event->is<sf::Event::Closed>())
+      if (event->is<sf::Event::Closed>()) {
         window.close();
-
-      if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+      } else if (const auto* resized = event->getIf<sf::Event::Resized>()) {
         // On resize:
         // - set new view
         // - unfocus search
@@ -137,6 +139,19 @@ int main(int argc, char *argv[]) {
 
             break;
           }
+        }
+      } else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+        if (keyPressed->code == sf::Keyboard::Key::F11) {
+          if (is_fullscreen)
+            set_window(sf::State::Windowed);
+          else
+            set_window(sf::State::Fullscreen);
+        } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::C) {
+          
+        } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::V) {
+          
+        } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::A) {
+          
         }
       }
 
@@ -283,7 +298,7 @@ int main(int argc, char *argv[]) {
               player.music->play();
           }
 
-          auto coords_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+          auto coords_pos = get_mouse_pos(window);
           float progress_pos = (coords_pos.x - player.data->progress.getPosition().x) / player.data->progress.getGlobalBounds().size.x;
           progress_pos = std::clamp(progress_pos, 0.f, 1.f);
           player.music->seek(progress_pos);
@@ -298,7 +313,7 @@ int main(int argc, char *argv[]) {
             player.volume_slider_active = false;
           }
 
-          auto coords_pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+          auto coords_pos = get_mouse_pos(window);
           float vol_pos = (coords_pos.x - player.data->vol_slider.getPosition().x) / player.data->vol_slider.getGlobalBounds().size.x;
           vol_pos = std::clamp(vol_pos, 0.f, 1.f);
           player.music->set_volume(vol_pos);
@@ -330,7 +345,7 @@ int main(int argc, char *argv[]) {
           if (player.live_mode) player.data->live->setTexture(*player.data->live_full_tex);
         }
 
-        auto pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        auto pos = get_mouse_pos(window);
 
         // Hover effects
 
@@ -375,7 +390,7 @@ int main(int argc, char *argv[]) {
       case (MenuData::PlaylistSelector): {
         auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
-        auto pos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        auto pos = get_mouse_pos(window);
 
         // Hover effects
 
