@@ -3,8 +3,10 @@
 
 #include <string>
 #include <memory>
+#include <SFML/Window/Export.hpp>
 #include "data.hpp"
 #include "events.hpp"
+#include "signals.hpp"
 
 class PopupComponent;
 extern std::unordered_map<std::string, std::shared_ptr<PopupComponent>> popup_components;
@@ -62,7 +64,7 @@ class UIComponent {
       global_z_index++;
 
       if (hidden)
-        this->hide();
+        hide();
     }
 
     virtual ~UIComponent() = default;
@@ -70,7 +72,7 @@ class UIComponent {
 
 class InputComponent : public UIComponent {
   private:
-    std::string input_string = "";
+    std::u32string input_string = U"";
     size_t cursor_pos = 0;
     sf::RenderWindow& window;
     bool show_cursor = false;
@@ -78,7 +80,7 @@ class InputComponent : public UIComponent {
     bool input_active = false;
     bool refresh_input_flag = true;
     sf::Clock cursor_clock;
-    std::string prev_input_string = "";
+    std::u32string prev_input_string = U"";
     std::string input_prompt;
     float corner_radius;
     sf::RoundedRectangleShape input_background;
@@ -90,6 +92,7 @@ class InputComponent : public UIComponent {
     size_t selection_end = std::string::npos;
     bool selecting = false;
     sf::RoundedRectangleShape selection_background;
+    std::u32string selected_text;
 
   public:
     InputComponent(
@@ -115,7 +118,7 @@ class InputComponent : public UIComponent {
         action_button.emplace(*action_button_tex);
       }
 
-      input_string = "";
+      input_string = U"";
       cursor_pos = 0;
 
       input_background.setSize(input_size);
@@ -149,11 +152,11 @@ class InputComponent : public UIComponent {
 
       new_focus_event(focus_events, id,
         [this](MenuData& menu_data, sf::Vector2f pos) {
-          if (!this->is_hidden())
-            this->focus(pos);
+          if (!is_hidden())
+            focus(pos);
         },
         [this](MenuData& menu_data) {
-          this->unfocus();
+          unfocus();
         },
         input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
 
@@ -161,9 +164,13 @@ class InputComponent : public UIComponent {
 
       new_release_event(release_events, id,
         [this](MenuData&) {
-          this->selecting = false;
+          selecting = false;
         },
         sf::Mouse::Button::Left, this);
+
+      ctrl_c_signal.connect(id, [this](){this->copy();});
+      ctrl_v_signal.connect(id, [this](){this->paste();});
+      ctrl_a_signal.connect(id, [this](){this->select_all();});
     }
 
     InputComponent() = delete;
@@ -178,18 +185,18 @@ class InputComponent : public UIComponent {
     InputComponent& operator=(InputComponent&&) = delete;
 
     void draw() override {
-      if (!this->is_hidden()) {
+      if (!is_hidden()) {
         window.draw(input_background);
         if (selection_start != std::string::npos) {
           if (selecting)
-            this->select();
-          this->draw_selection();
+            select();
+          draw_selection();
         }
         window.draw(input_text);
         if (action_button)
           window.draw(*action_button);
-        if (show_cursor && selection_start == std::string::npos)
-          this->draw_cursor();
+        if (show_cursor && selected_text.empty())
+          draw_cursor();
       }
     }
 
@@ -201,7 +208,7 @@ class InputComponent : public UIComponent {
     void move_cursor_left() {
       if (cursor_pos > 0) {
         // Keep cursor solid while changing cursor pos
-        this->reset_cursor();
+        reset_cursor();
 
         cursor_pos--;
       }
@@ -210,7 +217,7 @@ class InputComponent : public UIComponent {
     void move_cursor_right() {
       if (cursor_pos < input_string.size()) {
         // Keep cursor solid while changing cursor pos
-        this->reset_cursor();
+        reset_cursor();
 
         cursor_pos++;
       }
@@ -225,11 +232,11 @@ class InputComponent : public UIComponent {
       input_text.setString(input_string);
     }
 
-    void write_input(char32_t input) {
+    void write_char(char32_t input) {
       // Keep cursor solid while inputting
-      this->reset_cursor();
+      reset_cursor();
 
-      if (input < 32 || input > 126) { // TODO: Make char32_to_unicode and remove input > 126 restriction
+      if (input < 32) {
         switch (input) {
           case 8:
             if (input_string.size() > 0 && cursor_pos > 0) {
@@ -240,26 +247,47 @@ class InputComponent : public UIComponent {
         }
       }
       else {
-        std::string str_input = char32_to_utf8(input);
+        std::u32string str_input;
+        str_input += input;
 
         if (selection_start != std::string::npos) {
           input_string.erase(selection_start, selection_end - selection_start); // Remove what was in the selection
           input_string.insert(selection_start, str_input);
           cursor_pos = std::min(selection_start + 1, input_string.size());
-          this->deselect();
+          deselect();
         } else {
           input_string.insert(cursor_pos, str_input);
           cursor_pos++;
         }
 
-        this->update();
+        update();
+      }
+    }
+
+    void copy() {
+      if (m_focused && !selected_text.empty()) {
+        sf::Clipboard::setString(selected_text);
+      }
+    }
+
+    void paste() {
+      if (m_focused) {
+        sf::Clipboard::getString();
+      }
+    }
+
+    void select_all() {
+      if (m_focused) {
+        selection_start = 0;
+        selection_end = input_string.size();
+        selected_text = input_string;
       }
     }
 
     void focus(const sf::Vector2f& pos) {
-      this->m_focused = true;
+      m_focused = true;
 
-      this->deselect();
+      deselect();
 
       selecting = true;
 
@@ -275,14 +303,14 @@ class InputComponent : public UIComponent {
         selection_start = cursor_pos;
 
         // Keep cursor solid while changing cursor pos
-        this->reset_cursor();
+        reset_cursor();
       }
     }
 
     void unfocus() {
-      this->m_focused = false;
+      m_focused = false;
 
-      this->deselect();
+      deselect();
 
       input_active = false;
       show_cursor = false;
@@ -296,11 +324,13 @@ class InputComponent : public UIComponent {
     void deselect() {
       selection_start = std::string::npos;
       selection_end = std::string::npos;
+      selected_text = U"";
     }
 
     void select() {
       if (selection_start != std::string::npos) {
         selection_end = find_character_at_pos_x(input_string, input_text, get_mouse_pos(window).x);
+        selected_text = input_string.substr(selection_start, selection_end - selection_start);
       }
     }
 
@@ -362,11 +392,11 @@ class InputComponent : public UIComponent {
     }
 
     void clear_input() {
-      input_string = "";
+      input_string = U"";
       cursor_pos = 0;
     }
 
-    std::string& get_input_string() {
+    std::u32string get_input_string() {
       return input_string;
     }
 
@@ -433,7 +463,7 @@ class ButtonComponent : public UIComponent {
 
   public:
     void draw() override {
-      if (!this->is_hidden()) {
+      if (!is_hidden()) {
         window.draw(button_shape);
         window.draw(button_text);
       }
@@ -490,7 +520,7 @@ class ButtonComponent : public UIComponent {
         button_shape.getPosition().y + button_shape.getGlobalBounds().size.y / 2 - button_text.getGlobalBounds().size.y
       });
 
-      new_click_event(click_events, id, [this, function](MenuData& menu_data) { if (!this->is_hidden()) function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
+      new_click_event(click_events, id, [this, function](MenuData& menu_data) { if (!is_hidden()) function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
     }
 
     ~ButtonComponent() = default;
@@ -512,7 +542,7 @@ class PopupComponent : public UIComponent {
 
   public:
     void draw() override {
-      if (!this->is_hidden()) {
+      if (!is_hidden()) {
         draw_rounded_rectangle_shapes();
         draw_input_components();
         draw_button_components();
@@ -538,13 +568,13 @@ class PopupComponent : public UIComponent {
     }
 
     void new_input(std::string input_id, std::shared_ptr<InputComponent> input_component) {
-      input_component->z_index += this->z_index;
+      input_component->z_index += z_index;
 
       input_components.insert({input_id, input_component});
     }
 
     void new_button(std::string id, std::shared_ptr<ButtonComponent> button_component) {
-      button_component->z_index += this->z_index;
+      button_component->z_index += z_index;
 
       button_components.insert({id, std::move(button_component)});
     }

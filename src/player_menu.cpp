@@ -42,15 +42,15 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   // Artist and title information (for bellow the cover art)
 
-  std::string artist_string = get_song_artist(id);
-  std::string title_string = get_song_title(id);
+  auto artist_string = get_song_artist(id);
+  auto title_string = get_song_title(id);
 
   if (artist_string.size() > 53) {
-    artist_string = artist_string.substr(0, 50) + "...";
+    artist_string = artist_string.substr(0, 50) + U"...";
   }
 
   if (title_string.size() > 45) {
-    title_string = title_string.substr(0, 42) + "...";
+    title_string = title_string.substr(0, 42) + U"...";
   }
 
   sf::Text artist(default_font, artist_string);
@@ -606,30 +606,17 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
           get_queue_entry_position(idx)
       });
 
-      std::ifstream artist_file(queue_song_path + ".artist");
-      std::string artist_string = "";
-      if (artist_file.good()) {
-        std::getline(artist_file, artist_string);
-      } else {
-        std::cerr << "Error: Failed to read artist name from '" << queue_song_path << ".artist" << "'.";
-      }
+      auto artist_string = get_song_artist(id);
+      auto title_string = get_song_title(id);
 
       if ((int)artist_string.size() > queue_max_char) {
         artist_string.erase(queue_max_char - 3, artist_string.size());
-        artist_string += "...";
-      }
-
-      std::ifstream title_file(queue_song_path + ".title");
-      std::string title_string = "";
-      if (title_file.good()) {
-        std::getline(title_file, title_string);
-      } else {
-        std::cerr << "Error: Failed to read title from '" << queue_song_path << ".title" << "'.";
+        artist_string += U"...";
       }
 
       if ((int)title_string.size() > queue_max_char) {
         title_string.erase(queue_max_char - 3, title_string.size());
-        title_string += "...";
+        title_string += U"...";
       }
 
       if (search_active && !matching(player_data.search->get_input_string(), artist_string, match_diff) && !matching(player_data.search->get_input_string(), title_string, match_diff)) continue; // Skip because it's not a match

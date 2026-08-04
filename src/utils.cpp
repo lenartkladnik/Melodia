@@ -1,5 +1,8 @@
 #include <SFML/Graphics.hpp>
 #include <string>
+#include <unicode/uchar.h>
+#include <unicode/unistr.h>
+#include <unicode/utypes.h>
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/storage_handler.hpp"
@@ -11,6 +14,8 @@
   #define POPEN popen
   #define PCLOSE pclose
 #endif
+
+using icu::UnicodeString;
 
 void debug_draw_bounds(sf::RenderWindow& window, sf::FloatRect bounds) {
   sf::RectangleShape rect;
@@ -143,7 +148,7 @@ sf::Vector2f find_character_size(const sf::Text& text, size_t index) {
   return {width, height};
 }
 
-size_t find_character_at_pos_x(const std::string& string, const sf::Text& text, float pos_x) {
+size_t find_character_at_pos_x(const std::u32string& string, const sf::Text& text, float pos_x) {
   size_t char_pos = string.size(); // This will be returned if all of the glyphs are behind pos_x
   for (size_t i = 0; i < string.size(); i++) {
     if (find_character_pos(text, i).x + (find_character_size(text, i).x / 2) > pos_x) {
@@ -152,28 +157,6 @@ size_t find_character_at_pos_x(const std::string& string, const sf::Text& text, 
     }
   }
   return char_pos;
-}
-
-std::string char32_to_utf8(char32_t c32) {
-  std::string result;
-
-  if (c32 <= 0x7F) {
-    result += static_cast<char>(c32);
-  } else if (c32 <= 0x7FF) {
-    result += static_cast<char>(0xC0 | (c32 >> 6));
-    result += static_cast<char>(0x80 | (c32 & 0x3F));
-  } else if (c32 <= 0xFFFF) {
-    result += static_cast<char>(0xE0 | (c32 >> 12));
-    result += static_cast<char>(0x80 | ((c32 >> 6) & 0x3F));
-    result += static_cast<char>(0x80 | (c32 & 0x3F));
-  } else if (c32 <= 0x10FFFF) {
-    result += static_cast<char>(0xF0 | (c32 >> 18));
-    result += static_cast<char>(0x80 | ((c32 >> 12) & 0x3F));
-    result += static_cast<char>(0x80 | ((c32 >> 6) & 0x3F));
-    result += static_cast<char>(0x80 | (c32 & 0x3F));
-  }
-
-  return result;
 }
 
 std::string stripNonAlphaNum(const std::string& str) {
@@ -186,32 +169,107 @@ std::string stripNonAlphaNum(const std::string& str) {
   return result;
 }
 
-bool isSubstring(const std::string& s1, const std::string& s2) {
+std::u32string utf8_to_u32(const std::string& utf8) {
+    UnicodeString ustr = UnicodeString::fromUTF8(utf8); // UTF-8 -> UTF-16 internally
+
+    UErrorCode err = U_ZERO_ERROR;
+    int32_t capacity = ustr.length() + 1; // upper bound; UTF-32 length <= UTF-16 length
+    std::u32string result(capacity, 0);
+
+    int32_t written = ustr.toUTF32(
+        reinterpret_cast<UChar32*>(&result[0]), capacity, err);
+
+    if (U_FAILURE(err)) {
+        throw std::runtime_error("UTF-8 to UTF-32 conversion failed");
+    }
+    result.resize(written);
+    return result;
+}
+
+std::string u32_to_utf8(const std::u32string& u32) {
+    UnicodeString ustr = UnicodeString::fromUTF32(
+        reinterpret_cast<const UChar32*>(u32.data()),
+        static_cast<int32_t>(u32.length()));
+
+    std::string result;
+    ustr.toUTF8String(result);
+    return result;
+}
+
+char32_t to_lower_u32(char32_t c) {
+    return static_cast<char32_t>(u_tolower(static_cast<UChar32>(c)));
+}
+
+std::u32string lower_u32(std::u32string s) {
+    std::transform(s.begin(), s.end(), s.begin(), to_lower_u32);
+    return s;
+}
+
+bool isSubstring(const std::u32string& s1, const std::u32string& s2) {
   return s1.find(s2) != std::string::npos || s2.find(s1) != std::string::npos;
 }
 
-bool matching(const std::string& s1, const std::string& s2, float diff, const char split) {
-    auto s1_clean = stripNonAlphaNum(s1);
-    auto s2_clean = stripNonAlphaNum(s2);
+std::vector<std::u32string> split_u32(const std::u32string& s, char32_t delim) {
+  std::vector<std::u32string> result;
+  if (s.empty()) return result;
+  size_t from = 0;
+  while (1) {
+    size_t pos = s.find(delim, from);
+    if (pos == std::string::npos) {
+      if (from < s.size()) {
+        result.emplace_back(s.substr(from));
+      }
+      break;
+    }
+    auto subs = s.substr(from, pos - from);
+    if (!subs.empty())
+      result.emplace_back(subs);
+    from = pos + 1;
+  }
+  return result;
+}
 
-    std::transform(s1_clean.begin(), s1_clean.end(), s1_clean.begin(), ::tolower);
-    std::transform(s2_clean.begin(), s2_clean.end(), s2_clean.begin(), ::tolower);
+// From: https://www.geeksforgeeks.org/dsa/damerau-levenshtein-distance/
+int DamerauLevenstheinDistance(const std::u32string& s1, const std::u32string& s2) {
+  // Create a table to store the results of subproblems
+  std::vector<std::vector<int>> dp(s1.length() + 1, std::vector<int>(s2.length() + 1));
+
+  // Initialize the table
+  for (int i = 0; i <= s1.length(); i++) {
+    dp[i][0] = i;
+  }
+  for (int j = 0; j <= s2.length(); j++) {
+    dp[0][j] = j;
+  }
+
+  // Populate the table using dynamic programming
+  for (int i = 1; i <= s1.length(); i++) {
+    for (int j = 1; j <= s2.length(); j++) {
+      if (s1[i-1] == s2[j-1]) {
+        dp[i][j] = dp[i-1][j-1];
+      } else {
+        dp[i][j] = 1 + std::min(dp[i-1][j], std::min(dp[i][j-1], dp[i-1][j-1]));
+      }
+    }
+  }
+
+  // Return the edit distance
+  return dp[s1.length()][s2.length()];
+}
+
+bool _matching(const std::u32string& s1, const std::u32string& s2, float diff, const char split) {
+    auto s1_clean = s1;
+    auto s2_clean = s2;
+
+    std::transform(s1_clean.begin(), s1_clean.end(), s1_clean.begin(), to_lower_u32);
+    std::transform(s2_clean.begin(), s2_clean.end(), s2_clean.begin(), to_lower_u32);
 
     if (isSubstring(s1_clean, s2_clean)) {
       return true;
     }
 
-    std::vector<std::string> s1_split, s2_split;
-    std::stringstream ss1(s1_clean), ss2(s2_clean);
-    std::string token;
-
-    while (std::getline(ss1, token, split)) {
-      s1_split.push_back(token);
-    }
-
-    while (std::getline(ss2, token, split)) {
-      s2_split.push_back(token);
-    }
+    std::vector<std::u32string> s1_split = split_u32(s1_clean, static_cast<char32_t>(split));
+    std::vector<std::u32string> s2_split = split_u32(s2_clean, static_cast<char32_t>(split));
 
     float score = 0;
     int matches = 0;
@@ -222,7 +280,7 @@ bool matching(const std::string& s1, const std::string& s2, float diff, const ch
         const auto& j = s2_split[d];
 
         // Calculate character difference
-        std::string diff_i_j, diff_j_i;
+        std::u32string diff_i_j, diff_j_i;
         std::set_difference(i.begin(), i.end(), j.begin(), j.end(), std::inserter(diff_i_j, std::begin(diff_i_j)));
         std::set_difference(j.begin(), j.end(), i.begin(), i.end(), std::inserter(diff_j_i, std::begin(diff_j_i)));
 
@@ -241,6 +299,49 @@ bool matching(const std::string& s1, const std::string& s2, float diff, const ch
     }
 
     return false;
+}
+
+bool strings_match(std::u32string s1, std::u32string s2, int threshold) {
+  std::transform(s1.begin(), s1.end(), s1.begin(), to_lower_u32);
+  std::transform(s2.begin(), s2.end(), s2.begin(), to_lower_u32);
+
+  if (isSubstring(s1, s2))
+    return true;
+
+  if (std::min(DamerauLevenstheinDistance(s1, s2), DamerauLevenstheinDistance(s2, s1)) <= threshold)
+    return true;
+
+  return false;
+}
+
+bool chunks_match(const std::u32string& full_string, const std::u32string& small_string, int chunk_size) {
+  if (chunk_size <= 0 || full_string.size() < static_cast<size_t>(chunk_size))
+    return false;
+
+  for (size_t i = 0; i + chunk_size <= full_string.size(); i++) {
+    std::u32string chunk = full_string.substr(i, chunk_size);
+    if (strings_match(small_string, chunk, 0))
+      return true;
+  }
+
+  return false;
+}
+
+bool matching(std::u32string s1, std::u32string s2, int threshold) {
+  if (strings_match(s1, s2, threshold))
+    return true;
+
+  if (s1.length() < s2.length()) {
+    if (s1.length() > threshold) {
+      return chunks_match(s2, s1, (int)(s1.length() / 2));
+    }
+  } else {
+    if (s2.length() > threshold) {
+      return chunks_match(s1, s2, (int)(s1.length() / 2));
+    }
+  }
+
+  return false;
 }
 
 std::string seconds_to_human_readable(float total_sec_left) {

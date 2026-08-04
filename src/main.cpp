@@ -3,6 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <math.h>
+#include <clocale>
 #include "include/components.hpp"
 #include "include/player_menu.hpp"
 #include "include/playlist_selector_menu.hpp"
@@ -10,12 +11,13 @@
 #include "include/animation.hpp"
 #include "include/events.hpp"
 #include "include/storage_handler.hpp"
+#include "include/signals.hpp"
 
 using namespace sf;
 
 int main(int argc, char *argv[]) {
   set_window(sf::State::Windowed);
-
+  std::setlocale(LC_ALL, "en_US.UTF-8");
   if (!ensure_storage())
     return 1;
 
@@ -147,11 +149,11 @@ int main(int argc, char *argv[]) {
           else
             set_window(sf::State::Fullscreen);
         } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::C) {
-          
+          ctrl_c_signal.emit();
         } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::V) {
-          
+          ctrl_v_signal.emit();
         } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::A) {
-          
+          ctrl_a_signal.emit();
         }
       }
 
@@ -192,7 +194,7 @@ int main(int argc, char *argv[]) {
 
         on_anywhere<sf::Event::TextEntered>(*event, text_events,
           [&](const auto* e, auto& item) { return item.input_component->is_active() && !item.input_component->is_hidden() && item.input_component->is_focused(); },
-          [&](const auto* e, auto* item) { item->input_component->write_input(e->unicode); }
+          [&](const auto* e, auto* item) { item->input_component->write_char(e->unicode); }
         );
       }
 

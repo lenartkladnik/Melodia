@@ -92,7 +92,7 @@ std::string construct_song_path(int id) {
   return base_music_path_data + std::to_string(id);
 }
 
-std::string get_song_title(int id) {
+std::u32string get_song_title(int id) {
   auto song_path = construct_song_path(id);
 
   std::ifstream title_file(song_path + ".title");
@@ -103,10 +103,10 @@ std::string get_song_title(int id) {
     std::cerr << "Error: Failed to read title from '" << song_path << ".title" << "'.";
   }
 
-  return title_string;
+  return utf8_to_u32(title_string);
 }
 
-std::string get_song_artist(int id) {
+std::u32string get_song_artist(int id) {
   auto song_path = construct_song_path(id);
 
   std::ifstream artist_file(song_path + ".artist");
@@ -117,7 +117,7 @@ std::string get_song_artist(int id) {
     std::cerr << "Error: Failed to read artist name from '" << song_path << ".artist" << "'.";
   }
 
-  return artist_string;
+  return utf8_to_u32(artist_string);
 }
 
 std::vector<std::string> get_all_playlists() {
@@ -156,7 +156,7 @@ std::vector<int> get_playlist(const std::string& name) {
   return ids;
 }
 
-std::vector<int> search_all_songs(const std::string& query) {
+std::vector<int> search_all_songs(const std::u32string& query) {
   std::vector<int> results;
 
   struct stat s;

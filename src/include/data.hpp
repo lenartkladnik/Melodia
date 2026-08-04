@@ -37,7 +37,7 @@ extern const float selector_cover_size;
 extern const sf::Vector2f selector_size;
 extern const int queue_items;
 extern const float move_speed;
-extern const float match_diff;
+extern const int match_diff;
 extern const int player_search_max_char;
 extern const int playlist_search_max_char;
 extern int input_max_char;

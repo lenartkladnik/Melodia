@@ -78,11 +78,11 @@ inline std::string get_yt_dlp_downloaded_path() {
 #endif
 }
 
-bool _yt_dlp_download_song_from_query(const std::string& dlp_path, int new_id, const std::string& query) {
+bool _yt_dlp_download_song_from_query(const std::string& dlp_path, int new_id, const std::u32string& query) {
   auto new_base = base_music_path_data + std::to_string(new_id);
-  std::string yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + query + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --no-playlist --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
+  auto yt_dlp_args = " -I 1 \"https://music.youtube.com/search?q=" + u32_to_utf8(query) + "\" -xciw -f \"bestaudio/best\" --audio-format mp3 --audio-quality 0 --no-playlist --print-to-file \"%(artist)s\" " + new_base + ".artist --print-to-file \"%(track)s\" " + new_base + ".title -o \"" + new_base + "\".mp3";
 
-  std::string command = dlp_path + yt_dlp_args; // dlp_path + " --ffmpeg-location \"" + progs_path + "\"" + yt_dlp_args;
+  auto command = dlp_path + yt_dlp_args; // dlp_path + " --ffmpeg-location \"" + progs_path + "\"" + yt_dlp_args;
 
   std::cout << "Calling system with '" << command << "'\n";
 
@@ -151,12 +151,12 @@ void hexchar(unsigned char c, unsigned char &hex1, unsigned char &hex2) {
   hex2 += hex2 <= 9 ? '0' : 'a' - 10;
 }
 
-std::string urlencode(std::string s) {
-  const char *str = s.c_str();
-  std::vector<char> v(s.size());
+std::string urlencode(const std::u32string& s) {
+  const char32_t *str = s.c_str();
+  std::vector<char32_t> v(s.size());
   v.clear();
   for (size_t i = 0, l = s.size(); i < l; i++) {
-    char c = str[i];
+    auto c = str[i];
     if ((c >= '0' && c <= '9') ||
       (c >= 'a' && c <= 'z') ||
       (c >= 'A' && c <= 'Z') ||
@@ -190,10 +190,10 @@ bool _download_cover_art(int new_id) {
   std::string new_base = base_music_path_data + std::to_string(new_id);
   std::string temp_file_path = ".cover_art.png.tmp";
 
-  std::string artist_string = get_song_artist(new_id);
-  std::string title_string = get_song_title(new_id);
+  auto artist_string = get_song_artist(new_id);
+  auto title_string = get_song_title(new_id);
 
-  std::string query = "/search/albums?q=" + urlencode(title_string + " by " + artist_string);
+  auto query = "/search/albums?q=" + urlencode(title_string + U" by " + artist_string);
 
   progress_bar_doing_string = "Connecting to '" + main_base_url + "'";
 
@@ -268,7 +268,7 @@ bool _download_cover_art(int new_id) {
   return true;
 }
 
-bool _download_song_from_query(const std::string& query) {
+bool _download_song_from_query(const std::u32string& query) {
   if (pause_main_input_handling) return false; // Exit if a download is ongoing
 
   pause_main_input_handling = true;
@@ -297,7 +297,7 @@ bool _download_song_from_query(const std::string& query) {
     #endif
   }
 
-  std::cout << "Info: Attempting to download song from query '" << query << "'.\n";
+  std::cout << "Info: Attempting to download song from query '" << u32_to_utf8(query) << "'.\n";
 
   // Set progress bar
   progress_bar_string = "Downloading...";
@@ -324,7 +324,7 @@ bool _download_song_from_query(const std::string& query) {
 
   progress_bar_doing_string = "Downloading song file and metadata";
   if (!_yt_dlp_download_song_from_query(yt_dlp_path, new_id, query)) return false;
-  std::cout << "Info: Downloaded song file and metadata for query '" << query << "'.\n";
+  std::cout << "Info: Downloaded song file and metadata for query '" << u32_to_utf8(query) << "'.\n";
   progress_bar_amount += 1.f; // Done with downloading song file and metadata from query
 
   progress_bar_doing_string = "Downloading song cover";
@@ -336,48 +336,6 @@ bool _download_song_from_query(const std::string& query) {
   progress_bar_string = "";
 
   return true;
-}
-
-bool _archive_org_download_song_from_query(int new_id, const std::string& title, const std::string& artist) { // Not viable - poor songs
-  std::cout << "Calling with t:" << title << ", a:" << artist << "\n";
-  auto base_url = "https://archive.org";
-  httplib::Client archive_org(base_url);
-
-  // Try the exact search with title and artist
-  auto accurate_search_path = "/advancedsearch.php?q=title:%22" + urlencode(title) + "%22%20AND%20creator:%22" + urlencode(artist) + "%22&output=json&rows=100";
-  auto accurate_res = archive_org.Get(accurate_search_path);
-
-  if (accurate_res && accurate_res->status == 200) {
-    json resp_data = json::parse(accurate_res->body)["response"];
-
-    if (resp_data["numFound"] > 0) {
-      auto match = resp_data["docs"][0];
-
-      auto idf = match["identifier"].dump();
-
-      auto files_path = "/download/" + idf.substr(1, idf.size() - 2);
-      std::cout << files_path << "\n";
-      auto files_res = archive_org.Get(files_path);
-
-      if (files_res && files_res->status == 200) {
-        std::cout << files_res->body << "\n";
-
-        return true;
-      }
-    }
-  }
-
-  // Try the more general search (title + artist in one search string)
-  auto simpler_search_path = "/advancedsearch.php?q=%22" + urlencode(title) + "%20" + urlencode(artist) + "%22&output=json&rows=100";
-  auto simpler_res = archive_org.Get(simpler_search_path);
-
-  if (simpler_res && simpler_res->status == 200) {
-    std::cout << simpler_res->body << "\n";
-
-    return true;
-  }
-
-  return false;
 }
 
 void download_from_search(MenuData& menu_data) {

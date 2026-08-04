@@ -36,7 +36,7 @@ base = Environment(
     CPPPATH=["include", "external/lib"],
     CPPDEFINES=["CPPHTTPLIB_OPENSSL_SUPPORT"],
     CXXFLAGS=[f"-std=c++{cpp_standard}", "-fdiagnostics-color"],
-    LIBS=["libssl", "libcrypto"],
+    LIBS=["libssl", "libcrypto", "libicuio", "libicuuc"],
 )
 
 if not use_system_sfml:
