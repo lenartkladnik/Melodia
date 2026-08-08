@@ -61,19 +61,19 @@ struct DTCache {
   }
 
   int name_to_index(int id, const std::string& name) const {
-    auto idx = this->find(id);
+    auto idx = find(id);
     auto& names_vec = names[idx];
 
     return std::distance(names_vec.begin(), std::find(names_vec.begin(), names_vec.end(), name));
   }
 
   bool contains(int id) const {
-    return (ids.begin() + this->find(id)) != ids.end();
+    return (ids.begin() + find(id)) != ids.end();
   }
 
   void add(int id, std::string name, const DTPair& dt) {
-    if (this->contains(id)) {
-      auto idx = this->find(id);
+    if (contains(id)) {
+      auto idx = find(id);
       auto& vec = items[idx];
       vec.push_back(dt);
       names[idx].push_back(name);
@@ -85,8 +85,12 @@ struct DTCache {
     }
   }
 
+  DTPair get(int id, std::string name) const {
+    return items[find(id)][name_to_index(id, name)];
+  }
+
   void remove(int id) {
-    auto idx = this->find(id);
+    auto idx = find(id);
 
     ids.erase(ids.begin() + idx);
     names.erase(names.begin() + idx);
@@ -100,15 +104,11 @@ struct DTCache {
   }
 
   void draw(int id, sf::RenderWindow& window) const {
-    auto& vec = items[this->find(id)];
+    auto& vec = items[find(id)];
 
     for (auto dt : vec) {
       window.draw(dt.drawformable->get_drawable());
     }
-  }
-
-  const DTPair& get_item(int id, int index) const {
-    return items[this->find(id)][index];
   }
 };
 

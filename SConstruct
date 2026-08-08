@@ -36,7 +36,12 @@ base = Environment(
     CPPPATH=["include", "external/lib"],
     CPPDEFINES=["CPPHTTPLIB_OPENSSL_SUPPORT"],
     CXXFLAGS=[f"-std=c++{cpp_standard}", "-fdiagnostics-color"],
-    LIBS=["libssl", "libcrypto", "libicuio", "libicuuc"],
+    LIBS=[
+        "libssl",
+        "libcrypto",
+        "libicuio",
+        "libicuuc"
+    ],
 )
 
 if not use_system_sfml:
@@ -206,12 +211,14 @@ def ensure_openssl_build(source_dir, build_dir, install_dir):
 
     print(f"OpenSSL built in {build_dir}")
 
-if "debug" in build: # Same as debug-l0
+if "debug" in build:
     base.Append(CXXFLAGS=[
         "-g",
         "-O0",
         "-Wall",
-        "-Wextra"
+        "-Wextra",
+        "-Werror",
+        "-Wfatal-errors"
     ])
 
     out_dir = "dist/debug"

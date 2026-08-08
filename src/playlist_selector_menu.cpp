@@ -42,7 +42,7 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   return data;
 }
 
-bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window, MenuData& menu_data) {
+bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window) {
   global_z_index = 0;
 
   auto& data = *playlist_sel.data;
@@ -76,8 +76,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   int max_playlists_per_line = (int)(window_size.x / total_playlist_sel_size);
   float padding_to_center = (window_size.x - (total_playlist_sel_size * max_playlists_per_line)) / 2;
 
-  // Playlist Items
-
   for (size_t i = 0; i < data.playlists.size(); i++) {
     sf::Vector2f cover_pos = {
       total_playlist_sel_size * (i % max_playlists_per_line) + padding_to_center + (cover_offset / 2),
@@ -89,15 +87,36 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     cover->setPosition(cover_pos);
 
     if (data.drawables_cache.contains(i)) { // Only draw if the cache has it
-
       auto mouse_pos = get_mouse_pos(window);
 
-      auto& cover_dt = data.drawables_cache.get_item(i, data.drawables_cache.name_to_index(i, "cover"));
+      auto cover_dt = data.drawables_cache.get(i, "cover");
       if (cover_dt.drawformable->getGlobalBounds().contains(mouse_pos)) {
         // TODO: Hover effect
       }
 
       data.drawables_cache.draw(i, window);
+
+      if (data.playlist_names_cache.size() < i) { // || condition to redraw) {
+        auto sel_background = data.drawables_cache.get(i, "sel_background");
+        auto sel_background_transformable = sel_background.drawformable->get_transformable();
+        auto playlist_name_text_reference = std::make_shared<sf::Text>(default_font, data.playlists[i]);
+        playlist_name_text_reference->setFillColor(text_color);
+        setFontSize(*playlist_name_text_reference, large_font_size);
+        playlist_name_text_reference->setPosition({
+          sel_background_transformable.getPosition().x + selector_cover_size + 5.f,
+          sel_background_transformable.getPosition().y + 10.f
+        });
+        auto playlist_name_component = InputComponent(window, "playlist_name_" + std::to_string(i), playlist_name_text_reference, large_font_size);
+        if (data.playlist_names_cache.size() < i) {
+          data.playlist_names_cache.erase(data.playlist_names_cache.begin() + i);
+          data.playlist_names_cache.insert(data.playlist_names_cache.begin() + i, std::move(playlist_name_component));
+        } else {
+          data.playlist_names_cache.push_back(std::move(playlist_name_component));
+        }
+      }
+
+      auto& playlist_name = data.playlist_names_cache[i];
+      playlist_name.draw();
 
       new_click_event(click_events, "playlist_play_" + std::to_string(i), [i](MenuData& menu_data) {
         switch_to_player(menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
@@ -132,14 +151,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     sel_background_shadow->setPosition({sel_background->getPosition().x + shadow_offset, sel_background->getPosition().y + shadow_offset});
     sel_background_shadow->setFillColor(background_shadow_color_transparent);
 
-    auto playlist_name = std::make_shared<sf::Text>(default_font, data.playlists[i]);
-    playlist_name->setFillColor(text_color);
-    setFontSize(*playlist_name, large_font_size);
-    playlist_name->setPosition({
-      sel_background->getPosition().x + selector_cover_size + 5.f,
-      sel_background->getPosition().y + 10.f
-    });
-
     int item_count = get_playlist(data.playlists[i]).size();
     auto playlist_size = std::make_shared<sf::Text>(default_font, std::to_string(item_count) + " item" + (item_count == 1 ? "" : "s"));
     playlist_size->setFillColor(light_text_color);
@@ -151,7 +162,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     data.drawables_cache.add(i, "sel_background_shadow", DTPair{std::make_shared<DrawformableObject>(sel_background_shadow, sel_background_shadow), nullptr});
     data.drawables_cache.add(i, "sel_background", DTPair{std::make_shared<DrawformableObject>(sel_background, sel_background), nullptr});
-    data.drawables_cache.add(i, "playlist_name", DTPair{std::make_shared<DrawformableObject>(playlist_name, playlist_name), nullptr});
     data.drawables_cache.add(i, "playlist_size", DTPair{std::make_shared<DrawformableObject>(playlist_size, playlist_size), nullptr});
     data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture});
   }
@@ -234,8 +244,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     float view_width = search_results_background.getGlobalBounds().size.x / window_size.x;
     float view_height = search_results_background_h / window_size.y;
 
-    float download_prompt_height = 75.f;
-
     sf::View search_results_view;
     search_results_view.setSize({
       search_results_background.getGlobalBounds().size.x,
@@ -294,14 +302,14 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       if (actual_results_bounds.contains(search_res_more_bounds.position)) {
         new_click_event(search_res_click_events, "search_res_more_bounds_" + std::to_string(search_res_id),
-          [search_res_id](MenuData& menu_data) {
+          [search_res_id](MenuData&) {
             std::cout << "Edit " << search_res_id << std::endl;
           },
           search_res_more_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
         );
 
         new_click_event(search_res_click_events, "search_res_bounds_" + std::to_string(search_res_id),
-          [search_res_id](MenuData& menu_data) {
+          [search_res_id](MenuData&) {
             dragging_search_result = search_res_id;
           },
           search_res_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
@@ -317,7 +325,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
               auto dropped_pos = get_mouse_pos(window);
 
               for (size_t i = 0; i < data->playlists.size(); i++) {
-                auto& background = data->drawables_cache.get_item(i, data->drawables_cache.name_to_index(i, "sel_background"));
+                auto background = data->drawables_cache.get(i, "sel_background");
                 auto background_bounds = background.drawformable->getGlobalBounds();
 
                 if (background_bounds.contains(dropped_pos)) {

@@ -35,7 +35,7 @@ extern const float slider_threshold;
 extern const float queue_cover_size;
 extern const float selector_cover_size;
 extern const sf::Vector2f selector_size;
-extern const int queue_items;
+extern const unsigned int queue_items;
 extern const float move_speed;
 extern const int match_diff;
 extern const int player_search_max_char;
@@ -275,6 +275,7 @@ struct StaticPlaylistSelectorData {
   std::shared_ptr<InputComponent> search;
   std::vector<std::string> playlists;
   DTCache drawables_cache;
+  std::vector<InputComponent> playlist_names_cache;
 
   StaticPlaylistSelectorData() = default;
   ~StaticPlaylistSelectorData() = default;

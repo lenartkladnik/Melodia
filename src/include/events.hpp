@@ -62,6 +62,27 @@ struct UIEvent {
   bool disabled = false;
 };
 
+template<typename TUIEvent>
+bool remove_if_event(std::vector<TUIEvent>& container, std::string id) {
+  size_t i = 0;
+  for (const auto& uievent : container) {
+    if (uievent.id == id) {
+      container.erase(container.begin() + i);
+      return true;
+    }
+    i++;
+  }
+
+  return false;
+}
+
+template<typename TUIEvent>
+void remove_event(std::vector<TUIEvent>& container, std::string id) {
+  if (!remove_if_event(container, id)) {
+    throw "Error: Tried to remove event that doesn't exist (id='" + id + "'')";
+  }
+}
+
 struct ClickEvent : UIEvent {
   std::function<void(MenuData&)> function;
   sf::Mouse::Button mouse_button;

@@ -33,7 +33,7 @@ std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int son
       background_shadow_color.r,
       background_shadow_color.g,
       background_shadow_color.b,
-      dragging ? 90 : background_shadow_color.a // Make the container slightly transparent when dragging
+      (uint8_t)(dragging ? 90 : background_shadow_color.a) // Make the container slightly transparent when dragging
   });
   background.setPosition({cover.getPosition().x - 5.f, cover.getPosition().y - 5.f});
 

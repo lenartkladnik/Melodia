@@ -15,8 +15,16 @@ function _build_template() {
   fi
 }
 
+function build_debug_l0() {
+  _build_template "$1" "linux" "debug-l0" "dev-build" "main.cpp"
+}
+
+function build_debug_l1() {
+  _build_template "$1" "linux" "debug-l1" "dev-build" "main.cpp"
+}
+
 function build_debug() {
-  _build_template "$1" "linux" "debug" "dev-build" "main.cpp"
+  build_debug_l1
 }
 
 alias build_all="scons"

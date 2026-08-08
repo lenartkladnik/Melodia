@@ -51,6 +51,7 @@
 - add song removal and propagate song removal (check every playlist and remove the song if it is included)
 
 ### downloading
+- mass downloading with multithreading
 - ~progress bar for download (eg. small popup window)~
 - better error handling (cleanup, exit on error, ...)
 

@@ -235,16 +235,16 @@ int DamerauLevenstheinDistance(const std::u32string& s1, const std::u32string& s
   std::vector<std::vector<int>> dp(s1.length() + 1, std::vector<int>(s2.length() + 1));
 
   // Initialize the table
-  for (int i = 0; i <= s1.length(); i++) {
+  for (size_t i = 0; i <= s1.length(); i++) {
     dp[i][0] = i;
   }
-  for (int j = 0; j <= s2.length(); j++) {
+  for (size_t j = 0; j <= s2.length(); j++) {
     dp[0][j] = j;
   }
 
   // Populate the table using dynamic programming
-  for (int i = 1; i <= s1.length(); i++) {
-    for (int j = 1; j <= s2.length(); j++) {
+  for (size_t i = 1; i <= s1.length(); i++) {
+    for (size_t j = 1; j <= s2.length(); j++) {
       if (s1[i-1] == s2[j-1]) {
         dp[i][j] = dp[i-1][j-1];
       } else {
@@ -327,7 +327,7 @@ bool chunks_match(const std::u32string& full_string, const std::u32string& small
   return false;
 }
 
-bool matching(std::u32string s1, std::u32string s2, int threshold) {
+bool matching(std::u32string s1, std::u32string s2, size_t threshold) {
   if (strings_match(s1, s2, threshold))
     return true;
 
@@ -402,4 +402,16 @@ void reset_globals() {
   // Reset the global z-index since
   // all the objects must be redrawn
   global_z_index = 0;
+}
+
+sf::Color sub_colors(sf::Color a, sf::Color b) {
+  return sf::Color({(uint8_t)(a.r - b.r), (uint8_t)(a.g - b.g), (uint8_t)(a.b - b.b), (uint8_t)(a.a - b.a)});
+}
+
+sf::Color add_colors(sf::Color a, sf::Color b) {
+  return sf::Color({(uint8_t)(a.r + b.r), (uint8_t)(a.g + b.g), (uint8_t)(a.b + b.b), (uint8_t)(a.a + b.a)});
+}
+
+sf::Color add_int_to_color(sf::Color a, int b) {
+  return sf::Color({(uint8_t)(a.r + b), (uint8_t)(a.g + b), (uint8_t)(a.b + b)});
 }

@@ -1,8 +1,6 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
-#include "../external/lib/httplib.h"
-#include "../external/lib/nlohmann/json.hpp"
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/storage_handler.hpp"
@@ -13,9 +11,19 @@
 #endif
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 
+// Disable warnings produced by external libs
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+
+#include "../external/lib/httplib.h"
+#include "../external/lib/nlohmann/json.hpp"
 #include "../external/lib/stb/stb_image.h"
 #include "../external/lib/stb/stb_image_resize2.h"
 #include "../external/lib/stb/stb_image_write.h"
+
+#pragma GCC diagnostic pop // Enable all warnings
 
 using json = nlohmann::json;
 
@@ -54,6 +62,7 @@ bool _download_file(std::string url, const std::string& out_path, int max_redire
 
     return true;
   }
+  return false;
 }
 
 inline std::string get_yt_dlp_download_url() {

@@ -236,14 +236,14 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, previous_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "trash", [](MenuData& menu_data) {
-    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+  new_click_event(click_events, "trash", [](MenuData&) {
+    // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Delete song" << std::endl;
   }, trash.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "manage_playlist", [](MenuData& menu_data) {
-    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+  new_click_event(click_events, "manage_playlist", [](MenuData&) {
+    // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Manage playlist popup" << std::endl;
   }, manage_playlist.getGlobalBounds(), sf::Mouse::Button::Left);
@@ -262,8 +262,8 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, favorite.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "edit", [](MenuData& menu_data) {
-    auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+  new_click_event(click_events, "edit", [](MenuData&) {
+    // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Edit song" << std::endl;
   }, edit.getGlobalBounds(), sf::Mouse::Button::Left);
@@ -563,7 +563,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
     }
 
     bool not_found = true;
-    int idx = 0;
+    size_t idx = 0;
     for (const int id : draw_ready_queue) {
       if ((idx >= queue_items) && id != player.dragging_queue) // Display a limited amount of queue, but always display the item being dragged (TODO: scrool)
         continue;

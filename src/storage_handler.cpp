@@ -27,7 +27,7 @@ bool ensure_storage() {
     mkdir(base_path_external_prog);
     mkdir(base_path_external);
     mkdir(base_path_external_prog);
-  } catch (const std::filesystem::filesystem_error err) {
+  } catch (const std::filesystem::filesystem_error& err) {
     std::cout << "Error: Failed to check and create necessary directories '" << err.what() << "'.\n";
     return false;
   }

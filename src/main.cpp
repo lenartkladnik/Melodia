@@ -15,7 +15,7 @@
 
 using namespace sf;
 
-int main(int argc, char *argv[]) {
+int main() {
   set_window(sf::State::Windowed);
   std::setlocale(LC_ALL, "en_US.UTF-8");
   if (!ensure_storage())
@@ -48,39 +48,41 @@ int main(int argc, char *argv[]) {
   getFontOffsetPixels(large_font_size);
 
 
-  auto open_queue = [](auto* player, auto speed){
-    player->data->queue_toggle->setTexture(*player->data->side_contract_tex);
-    player->data->queue_expanded = true;
-
-    animate_move_all_x(
-      {
-        &player->data->queue_background,
-        &player->data->queue_background_shadow
-      },
-      -10.f,
-      speed,
-      &player->data->queue_half_expanded,
-      true,
-      AnimationStage::half
-    );
-  };
-
-  auto close_queue = [](auto* player, auto speed) {
-    player->data->queue_toggle->setTexture(*player->data->side_expand_tex);
-    player->data->queue_half_expanded = false;
-    player->data->queue_expanded = false;
-
-    animate_move_x(
-      player->data->queue_background,
-      queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x,
-        -speed
-      );
-    animate_move_x(
-      player->data->queue_background_shadow,
-      queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x + shadow_offset,
-        -speed
-    );
-  };
+  // Queue animations (unused)
+  //
+  // auto open_queue = [](auto* player, auto speed){
+  //   player->data->queue_toggle->setTexture(*player->data->side_contract_tex);
+  //   player->data->queue_expanded = true;
+  //
+  //   animate_move_all_x(
+  //     {
+  //       &player->data->queue_background,
+  //       &player->data->queue_background_shadow
+  //     },
+  //     -10.f,
+  //     speed,
+  //     &player->data->queue_half_expanded,
+  //     true,
+  //     AnimationStage::half
+  //   );
+  // };
+  //
+  // auto close_queue = [](auto* player, auto speed) {
+  //   player->data->queue_toggle->setTexture(*player->data->side_expand_tex);
+  //   player->data->queue_half_expanded = false;
+  //   player->data->queue_expanded = false;
+  //
+  //   animate_move_x(
+  //     player->data->queue_background,
+  //     queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x,
+  //       -speed
+  //     );
+  //   animate_move_x(
+  //     player->data->queue_background_shadow,
+  //     queue_contracted_width - player->data->queue_background.getGlobalBounds().size.x + shadow_offset,
+  //       -speed
+  //   );
+  // };
 
   auto instant_open_queue = [](auto* player){
     player->data->queue_toggle->setTexture(*player->data->side_contract_tex);
@@ -159,17 +161,17 @@ int main(int argc, char *argv[]) {
 
       if (!pause_main_input_handling) {
         on<sf::Event::MouseWheelScrolled>(*event, scroll_events,
-          [&](const auto* e, auto& item) { return item.can_scroll; },
+          [&](const auto*, auto& item) { return item.can_scroll; },
           [&](const auto* e, auto* item) { item->scroll_offset -= e->delta * scroll_speed; },
           [](const auto*, auto*){}
         );
 
         on<sf::Event::MouseButtonPressed>(*event, click_events,
           [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
-          [&](const auto* e, auto* item) {
+          [&](const auto*, auto* item) {
             item->function(menu_data);
           },
-          [&](const auto* e, auto* item) {
+          [&](const auto*, auto* item) {
             if (item->component)
               item->component->unfocus();
           }
@@ -177,7 +179,7 @@ int main(int argc, char *argv[]) {
 
         on_anywhere<sf::Event::MouseButtonReleased>(*event, release_events,
           [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
-          [&](const auto* e, auto* item) {
+          [&](const auto*, auto* item) {
             item->function(menu_data);
           }
         );
@@ -193,7 +195,7 @@ int main(int argc, char *argv[]) {
         );
 
         on_anywhere<sf::Event::TextEntered>(*event, text_events,
-          [&](const auto* e, auto& item) { return item.input_component->is_active() && !item.input_component->is_hidden() && item.input_component->is_focused(); },
+          [&](const auto*, auto& item) { return item.input_component->is_active() && !item.input_component->is_hidden() && item.input_component->is_focused(); },
           [&](const auto* e, auto* item) { item->input_component->write_char(e->unicode); }
         );
       }
@@ -206,7 +208,7 @@ int main(int argc, char *argv[]) {
             return 1;
           }
 
-          auto& player = std::get<MenuData::PlayerData>(menu_data.data);
+          // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
         break;
         }
@@ -224,10 +226,10 @@ int main(int argc, char *argv[]) {
           if (playlist_sel.data->search->is_focused()) {
             on<sf::Event::MouseButtonPressed>(*event, search_res_click_events,
               [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
-              [&](const auto* e, const auto* item) {
+              [&](const auto*, const auto* item) {
                 item->function(menu_data);
               },
-              [&](const auto* e, const auto* item) {
+              [&](const auto*, const auto* item) {
                 if (item->component)
                   item->component->unfocus();
               }
@@ -235,7 +237,7 @@ int main(int argc, char *argv[]) {
 
             on_anywhere<sf::Event::MouseButtonReleased>(*event, search_res_release_events,
               [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
-              [&](const auto* e, const auto* item) {
+              [&](const auto*, const auto* item) {
                 item->function(menu_data);
               }
             );
@@ -416,7 +418,7 @@ int main(int argc, char *argv[]) {
 
 
         if (playlist_sel.data) {
-          if (!display_playlist_selector(playlist_sel, window, menu_data)) break; // false returned when switched to new menu
+          if (!display_playlist_selector(playlist_sel, window)) break; // false returned when switched to new menu
         }
 
       break;
