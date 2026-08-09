@@ -24,7 +24,7 @@ function build_debug_l1() {
 }
 
 function build_debug() {
-  build_debug_l1
+  build_debug_l1 "$1"
 }
 
 alias build_all="scons"

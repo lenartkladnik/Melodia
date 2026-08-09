@@ -7,6 +7,15 @@
 
 class UIComponent; // Forward declare
 
+struct UIEvent {
+  std::string id;
+  sf::FloatRect bounds;
+  sf::View view = default_view;
+  UIComponent* component = nullptr;
+  int rank = 0;
+  bool disabled = false;
+};
+
 template<typename TEvent, typename TContainer, typename TPredicate, typename THandler, typename THandlerElse>
 void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle, THandlerElse handle_else) {
   const auto* e = event.getIf<TEvent>();
@@ -15,7 +24,7 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   typename TContainer::value_type* best_item = nullptr;
   int max_z_index = std::numeric_limits<int>::min();
 
-  for (auto& item : items) {
+  for (auto& item: items) {
     if (item.bounds.contains(window.mapPixelToCoords(e->position, item.view)) && predicate(e, item)) {
       if (item.component) {
         if (!item.component->is_hidden() && (item.component->z_index > max_z_index)) {
@@ -30,7 +39,8 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   }
 
   // handle best item and unfocus all other items
-  for (auto& item : items) {
+  for (size_t i = 0; i < items.size(); i++) { // This kind of loop is required since the container can be mutated while it is being iterated
+    auto& item = items[i];
     if (&item == best_item)
       handle(e, best_item);
 
@@ -43,7 +53,8 @@ template<typename TEvent, typename TContainer, typename TPredicate, typename THa
 void on_anywhere(const sf::Event& event, TContainer& items, TPredicate predicate, THandler handle) {
   const auto* e = event.getIf<TEvent>();
   if (!e) return;
-  for (auto& item : items) {
+  for (size_t i = 0; i < items.size(); i++) { // This type of loop is required for the same reason as in 'void on (at event.hpp:33 (PS: If this number is off it's because I forgot to change it (also I wrote this at 22:42 on 8/8/26) (PPS: You can freely submit a pull request with it corrected and tell me I am lazy)))'
+    auto& item = items[i];
     if (item.component) {
       if (!item.component->is_hidden() && predicate(e, item))
         handle(e, &item);
@@ -53,33 +64,26 @@ void on_anywhere(const sf::Event& event, TContainer& items, TPredicate predicate
   }
 }
 
-struct UIEvent {
-  std::string id;
-  sf::FloatRect bounds;
-  sf::View view = default_view;
-  UIComponent* component = nullptr;
-  int rank = 0;
-  bool disabled = false;
-};
-
 template<typename TUIEvent>
 bool remove_if_event(std::vector<TUIEvent>& container, std::string id) {
   size_t i = 0;
   for (const auto& uievent : container) {
     if (uievent.id == id) {
+      std::cout << "[INFO] Removing event with id='" + id + "'.\n";
       container.erase(container.begin() + i);
       return true;
     }
     i++;
   }
 
+  std::cout << "[INFO] Tried to remove event with id='" + id + "' but it doesn't exist.\n";
   return false;
 }
 
 template<typename TUIEvent>
 void remove_event(std::vector<TUIEvent>& container, std::string id) {
   if (!remove_if_event(container, id)) {
-    throw "Error: Tried to remove event that doesn't exist (id='" + id + "'')";
+    throw std::runtime_error("Tried to remove event that doesn't exist (id='" + id + "'')");
   }
 }
 

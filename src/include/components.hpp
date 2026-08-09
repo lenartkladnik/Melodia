@@ -156,7 +156,7 @@ class InputComponent : public UIComponent {
 
       selection_background.setFillColor(selection_color);
       selection_background.setCornerPointCount(main_n);
-      selection_background.setCornersRadius(2);
+      selection_background.setCornersRadius(4);
 
       new_focus_event(focus_events, id,
         [this](MenuData&, sf::Vector2f pos) {
@@ -199,9 +199,19 @@ class InputComponent : public UIComponent {
       input_string = text_reference->getString().toUtf32();
       cursor_pos = 0;
 
+      input_background.setPosition(text_reference->getPosition());
+      input_background.setSize(text_reference->getGlobalBounds().size);
+      std::cout << text_reference->getGlobalBounds().size.x << "\n";
+
+      debug_draw_bounds(window, input_background.getGlobalBounds());
+
       input_text.setFillColor(text_color);
       setFontSize(input_text, font_size);
       input_text.setPosition(text_reference->getPosition());
+
+      selection_background.setFillColor(selection_color);
+      selection_background.setCornerPointCount(main_n);
+      selection_background.setCornersRadius(4);
 
       new_focus_event(focus_events, id,
         [this](MenuData&, sf::Vector2f pos) {
@@ -229,8 +239,8 @@ class InputComponent : public UIComponent {
     InputComponent() = delete;
 
     ~InputComponent() {
-      remove_event(text_events, component_id);
-      remove_event(release_events, component_id);
+      remove_if_event(text_events, component_id);
+      remove_if_event(release_events, component_id);
       remove_if_event(click_events, component_id + "_action_button");
       ctrl_c_signal.disconnect(component_id);
       ctrl_v_signal.disconnect(component_id);
@@ -240,6 +250,10 @@ class InputComponent : public UIComponent {
     // Disallow copy
     InputComponent(const InputComponent&) = delete;
     InputComponent& operator=(const InputComponent&) = delete;
+
+    // Disallow move
+    InputComponent(InputComponent&&) = delete;
+    InputComponent& operator=(InputComponent&&) = delete;
 
     void draw() {
       if (!is_hidden()) {
@@ -300,7 +314,9 @@ class InputComponent : public UIComponent {
       input_text.setString(input_string);
     }
 
-    void write_char(char32_t input) {
+    void write_char(char32_t input, bool unblock = false) {
+      if (!m_focused && !unblock) return; // Refuse to write
+
       // Keep cursor solid while inputting
       reset_cursor();
 
@@ -332,9 +348,9 @@ class InputComponent : public UIComponent {
       }
     }
 
-    void write(std::u32string input) {
+    void write(std::u32string input, bool unblock = false) {
       for (const char32_t ch : input) {
-        write_char(ch);
+        write_char(ch, unblock);
       }
     }
 
@@ -422,7 +438,7 @@ class InputComponent : public UIComponent {
 
       float margin = 4.f;
 
-      selection_background.setPosition({start.x, start.y + margin / 2});
+      selection_background.setPosition({start.x, start.y + margin});
       selection_background.setSize({end.x - start.x, input_text.getGlobalBounds().size.y + (margin * 2)});
       selection_background.move({0.f, -selection_background.getGlobalBounds().size.y});
 
@@ -602,6 +618,10 @@ class ButtonComponent : public UIComponent {
   // Disallow copy
   ButtonComponent(const ButtonComponent&) = delete;
   ButtonComponent& operator=(const ButtonComponent&) = delete;
+
+  // Disallow move
+  ButtonComponent(ButtonComponent&&) = delete;
+  ButtonComponent& operator=(ButtonComponent&&) = delete;
 };
 
 class PopupComponent : public UIComponent {
@@ -712,6 +732,10 @@ class PopupComponent : public UIComponent {
   // Disallow copy
   PopupComponent(const PopupComponent&) = delete;
   PopupComponent& operator=(const PopupComponent&) = delete;
+
+  // Disallow move
+  PopupComponent(PopupComponent&&) = delete;
+  PopupComponent& operator=(PopupComponent&&) = delete;
 };
 
 class AreaComponent : public UIComponent {

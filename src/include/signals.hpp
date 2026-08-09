@@ -18,6 +18,10 @@ class Signal {
       callbacks.erase(id);
     }
 
+    void reset() {
+      callbacks.clear();
+    }
+
     void emit() {
       for (const auto& [_, callback] : callbacks) {
         callback();

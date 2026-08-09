@@ -28,7 +28,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   auto cover_texture = std::make_shared<sf::Texture>();
   if (!cover_texture->loadFromFile(song_path + ".png")) {
-    std::cerr << "Error: Failed to load '" << song_path << ".png" << "'." << std::endl;
+    throw std::runtime_error("Failed to load '" + song_path + ".png'.");
   }
   cover_texture->setSmooth(true);
 
@@ -581,7 +581,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
       sf::Image queue_cover_image;
       if (!queue_cover_image.loadFromFile(queue_song_path + ".small.png")) {
-        std::cerr << "Error: Failed to load '" << queue_song_path << ".small.png" << "'." << std::endl;
+        throw std::runtime_error("Failed to load '" + queue_song_path + ".small.png'.");
       }
 
       if (id == player.dragging_queue) {

@@ -19,6 +19,9 @@
 
 # New features / changes
 
+## important
+- download song and/or song data while the user is still inputting the search phrase so it is ready as soon as the user confirms search
+
 ## general
 - create an installer
 

@@ -6,6 +6,7 @@
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/storage_handler.hpp"
+#include "include/signals.hpp"
 
 #ifdef _WIN32
   #define POPEN _popen
@@ -19,7 +20,11 @@ using icu::UnicodeString;
 
 void debug_draw_bounds(sf::RenderWindow& window, sf::FloatRect bounds) {
   sf::RectangleShape rect;
+  if (bounds.size == sf::Vector2f(0, 0))
+    std::cout << "[WARN] debug_draw_bounds: Size is 0, 0\n";
   rect.setSize(bounds.size);
+  if (bounds.position == sf::Vector2f(0, 0))
+    std::cout << "[WARN] debug_draw_bounds: Position is 0, 0\n";
   rect.setPosition(bounds.position);
   rect.setFillColor(sf::Color(255, 0, 0, 128));
 
@@ -59,7 +64,7 @@ std::string exec(const char* cmd) {
 std::shared_ptr<sf::Texture> load_texture(std::string name) {
   auto tex = std::make_shared<sf::Texture>();
   if (!tex->loadFromFile(base_path_misc + name)) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << name << "'." << std::endl;
+    throw std::runtime_error("Failed to load '" + base_path_misc + name + "'.");
   }
   tex->setSmooth(true);
   return tex;
@@ -81,8 +86,7 @@ void mkdir(std::string path) {
 
 bool must_exist(std::string path) {
   if (!std::filesystem::exists(path)) {
-    std::cout << "Error: Path not found '" << path << "'\n";
-    return false;
+    throw std::runtime_error("Path not found '" + path + "'.");
   }
   return true;
 }
@@ -382,22 +386,20 @@ void setFontSize(sf::Text& text, float target_size, unsigned int raster_mul) {
 
 void reset_globals() {
   // All of the std::vector objects that get cleared here contain
-  // some pointers to objects in memory that has changed
+  // some pointers to objects in memory that have changed
 
   search_res_click_events.clear();
   search_results.clear();
-
   click_events.clear();
-
   popup_components.clear();
-
   text_events.clear();
-
   kb_events.clear();
-
   focus_events.clear();
-
   scroll_events.clear();
+
+  ctrl_c_signal.reset();
+  ctrl_v_signal.reset();
+  ctrl_a_signal.reset();
 
   // Reset the global z-index since
   // all the objects must be redrawn

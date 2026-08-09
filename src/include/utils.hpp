@@ -31,4 +31,21 @@ sf::Color sub_colors(sf::Color a, sf::Color b);
 sf::Color add_colors(sf::Color a, sf::Color b);
 sf::Color add_int_to_color(sf::Color a, int b);
 
+template<typename TShape>
+void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {
+  sf::FloatRect localBounds = target.getLocalBounds();
+
+  if (localBounds.size.x == 0.f || localBounds.size.y == 0.f) // Would be division by 0
+    return;
+
+  float scaleX = refBounds.size.x / localBounds.size.x;
+  float scaleY = refBounds.size.y / localBounds.size.y;
+  target.setScale(sf::Vector2f{scaleX, scaleY});
+
+  target.setPosition(sf::Vector2f{
+    refBounds.position.x - localBounds.position.x * scaleX,
+    refBounds.position.y - localBounds.position.y * scaleY
+  });
+}
+
 #endif

@@ -28,8 +28,7 @@ bool ensure_storage() {
     mkdir(base_path_external);
     mkdir(base_path_external_prog);
   } catch (const std::filesystem::filesystem_error& err) {
-    std::cout << "Error: Failed to check and create necessary directories '" << err.what() << "'.\n";
-    return false;
+    throw std::runtime_error("Failed to check and create necessary directories '" + std::string(err.what()) + "'.");
   }
 
   return true;
@@ -59,7 +58,7 @@ std::string create_new_playlist(int song_id) {
 
 std::string rename_playlist(std::string old_playlist, std::string new_playlist) {
   if (!is_string_valid_name(new_playlist))
-    throw "Playlist name contains invalid characters\n";
+    throw std::runtime_error("Playlist name contains invalid characters");
 
   auto new_playlist_path = get_next_available_path(base_music_path_playlists + new_playlist);
   std::filesystem::rename(base_music_path_playlists + old_playlist, new_playlist_path);
@@ -100,7 +99,7 @@ std::u32string get_song_title(int id) {
   if (title_file.good()) {
     std::getline(title_file, title_string);
   } else {
-    std::cerr << "Error: Failed to read title from '" << song_path << ".title" << "'.";
+    throw std::runtime_error("Failed to read title from '" + song_path + ".title'.");
   }
 
   return utf8_to_u32(title_string);
@@ -114,7 +113,7 @@ std::u32string get_song_artist(int id) {
   if (artist_file.good()) {
     std::getline(artist_file, artist_string);
   } else {
-    std::cerr << "Error: Failed to read artist name from '" << song_path << ".artist" << "'.";
+    throw std::runtime_error("Failed to read artist name from '" + song_path + ".artist'.");
   }
 
   return utf8_to_u32(artist_string);

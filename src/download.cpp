@@ -106,7 +106,7 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
   unsigned char* data = stbi_load(temp_file_path.c_str(), &w, &h, &channels, 0);
 
   if (!data) {
-    std::cerr << "Error: Failed to decode image from " << temp_file_path << ": " << stbi_failure_reason() << "\n";
+    throw std::runtime_error("Failed to decode image from " + temp_file_path + ": " + stbi_failure_reason());
     return false;
   }
 
@@ -119,7 +119,7 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
     case 3: layout = STBIR_RGB; break;
     case 4: layout = STBIR_RGBA; break;
     default:
-      std::cerr << "Error: Unsupported channel count for cover art image.\n";
+      throw std::runtime_error("Unsupported channel count for cover art image.");
       stbi_image_free(data);
       return false;
   }
@@ -137,7 +137,7 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
   progress_bar_amount += 1.f; // Done resizing the cover art image
 
   if (!stbi_write_png(output.c_str(), target_w, target_h, channels, resized.data(), target_w * channels)) {
-    std::cerr << "Error: Failed to write cover art image.\n";
+    throw std::runtime_error("Failed to write cover art image.");
     stbi_image_free(data);
     return false;
   }
@@ -256,7 +256,7 @@ bool _download_cover_art(int new_id) {
     std::ofstream temp_file(temp_file_path, std::ios::binary);
 
     if (!temp_file) {
-      std::cerr << "Error: Failed to write temporary cover art image.\n";
+      throw std::runtime_error("Failed to write temporary cover art image.");
       return false;
     }
 
@@ -297,8 +297,7 @@ bool _download_song_from_query(const std::u32string& query) {
 
     yt_dlp_path = get_yt_dlp_downloaded_path();
     if (!_download_file(get_yt_dlp_download_url(), yt_dlp_path)) {
-      std::cerr << "Error: Failed to download the yt-dlp binary form '" << yt_dlp_path << "'. Consider installing yt-dlp yourself systemwide.\n";
-      return false;
+      throw std::runtime_error("Failed to download the yt-dlp binary form '" + yt_dlp_path + "'. Consider installing yt-dlp yourself systemwide.");
     }
     #ifndef _WIN32
     // On POSIX like systems also chmod +x the file

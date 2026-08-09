@@ -96,7 +96,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
       data.drawables_cache.draw(i, window);
 
-      if (data.playlist_names_cache.size() < i) { // || condition to redraw) {
+      if (data.playlist_names_cache.size() <= i) { // || condition to redraw) {
         auto sel_background = data.drawables_cache.get(i, "sel_background");
         auto sel_background_transformable = sel_background.drawformable->get_transformable();
         auto playlist_name_text_reference = std::make_shared<sf::Text>(default_font, data.playlists[i]);
@@ -106,17 +106,15 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           sel_background_transformable.getPosition().x + selector_cover_size + 5.f,
           sel_background_transformable.getPosition().y + 10.f
         });
-        auto playlist_name_component = InputComponent(window, "playlist_name_" + std::to_string(i), playlist_name_text_reference, large_font_size);
-        if (data.playlist_names_cache.size() < i) {
-          data.playlist_names_cache.erase(data.playlist_names_cache.begin() + i);
-          data.playlist_names_cache.insert(data.playlist_names_cache.begin() + i, std::move(playlist_name_component));
-        } else {
-          data.playlist_names_cache.push_back(std::move(playlist_name_component));
-        }
+
+        if (data.playlist_names_cache.size() <= i)
+          data.playlist_names_cache.resize(i + 1);
+
+        data.playlist_names_cache[i] = std::make_unique<InputComponent>(window, "playlist_name_" + std::to_string(i), playlist_name_text_reference, large_font_size);
       }
 
       auto& playlist_name = data.playlist_names_cache[i];
-      playlist_name.draw();
+      playlist_name->draw();
 
       new_click_event(click_events, "playlist_play_" + std::to_string(i), [i](MenuData& menu_data) {
         switch_to_player(menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
@@ -137,7 +135,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     auto cover_texture = std::make_shared<sf::Texture>();
     if (!cover_texture->loadFromFile(base_music_path_playlists + data.playlists[i] + ".png")) {
-      std::cerr << "Error: Failed to load '" << base_music_path_playlists << data.playlists[i] << ".png" << "'." << std::endl;
+      throw std::runtime_error("Failed to load '" + base_music_path_playlists + data.playlists[i] + ".png'.");
     }
     cover_texture->setSmooth(true);
 

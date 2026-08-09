@@ -120,11 +120,10 @@ class MusicPlayer {
     float apparent_volume = 1.f;
 
     bool load(const std::string& path) {
-        if (!music.openFromFile(path)) {
-            std::cerr << "Error: Failed to load music file for '" << path << "'." << std::endl;
-            return false;
-        }
-        return true;
+      if (!music.openFromFile(path)) {
+        throw std::runtime_error("Failed to load music file for '" + path + "'.");
+      }
+      return true;
     }
 
     void play() {
@@ -275,7 +274,7 @@ struct StaticPlaylistSelectorData {
   std::shared_ptr<InputComponent> search;
   std::vector<std::string> playlists;
   DTCache drawables_cache;
-  std::vector<InputComponent> playlist_names_cache;
+  std::vector<std::unique_ptr<InputComponent>> playlist_names_cache;
 
   StaticPlaylistSelectorData() = default;
   ~StaticPlaylistSelectorData() = default;

@@ -25,13 +25,11 @@ int main() {
 
   sf::Image icon;
   if (!icon.loadFromFile(base_path_misc + "icon.png")) {
-    std::cerr << "Error: Failed to load '" << base_path_misc << "icon.png'." << std::endl;
-    return 1;
+    throw std::runtime_error("Failed to load '" + base_path_misc + "icon.png'.");
   }
 
   if (!default_font.openFromFile(base_path_misc + "base-font.ttf")) {
-    std::cerr << "Error: Failed to load font 'base-font.tff'." << std::endl;
-    return 1;
+    throw std::runtime_error("Failed to load font '" + base_path_misc + "base-font.tff'.");
   }
   default_font.setSmooth(true);
 
@@ -117,8 +115,7 @@ int main() {
         switch (menu_data.type) {
           case (MenuData::Player): {
             if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
-              std::cerr << "Error: MenuData, should be of type Player" << std::endl;
-              return 1;
+              throw std::runtime_error("MenuData should be of type MenuData::Player");
             }
 
             auto& player = std::get<MenuData::PlayerData>(menu_data.data);
@@ -130,8 +127,7 @@ int main() {
 
           case (MenuData::PlaylistSelector): {
             if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
-              std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
-              return 1;
+              throw std::runtime_error("MenuData should be of type MenuData::PlaylistSelector");
             }
 
             auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
@@ -204,8 +200,7 @@ int main() {
       switch (menu_data.type) {
         case (MenuData::Player): {
           if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
-            std::cerr << "Error: MenuData, should be of type Player" << std::endl;
-            return 1;
+            throw std::runtime_error("MenuData should be of type MenuData::Player");
           }
 
           // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
@@ -215,8 +210,7 @@ int main() {
 
         case (MenuData::PlaylistSelector): {
           if (!std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {
-            std::cerr << "Error: MenuData, should be of type PlaylistSelector" << std::endl;
-            return 1;
+            throw std::runtime_error("MenuData should be of type MenuData::PlaylistSelector");
           }
 
           auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
@@ -254,8 +248,7 @@ int main() {
         }
 
         default: {
-          std::cerr << "Error: Invalid menu selected." << std::endl;
-          switch_to_playlist_selector(menu_data, window);
+          throw std::runtime_error("Invalid menu selected");
 
         break;
         }
@@ -287,8 +280,7 @@ int main() {
     switch (menu_data.type) {
       case (MenuData::Player): {
         if (!std::holds_alternative<MenuData::PlayerData>(menu_data.data)) {
-          std::cerr << "Error: MenuData, should be of type Player" << std::endl;
-          return 1;
+          throw std::runtime_error("MenuData should be of type MenuData::Player");
         }
 
         auto& player = std::get<MenuData::PlayerData>(menu_data.data);
