@@ -187,7 +187,9 @@ int main() {
             auto pos = window.mapPixelToCoords(e->position, item->view);
             item->function(menu_data, pos);
           },
-          [](const auto*, auto*){}
+          [](const auto*, auto* item){
+            item->component->unfocus();
+          }
         );
 
         on_anywhere<sf::Event::TextEntered>(*event, text_events,

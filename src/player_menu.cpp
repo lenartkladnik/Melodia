@@ -201,7 +201,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     "player_search_input_c", // id
     sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f}, // size
     sf::Vector2f{50.f, queue_background.getPosition().y + 10.f}, // position
-    "Search",
+    U"Search",
     nullptr,
     [](MenuData&){}
   );

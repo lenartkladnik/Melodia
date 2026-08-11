@@ -25,7 +25,7 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
     "playlist_search_input_c", // id
     sf::Vector2f{search_size_x, 40.f}, // size
     sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f}, // position
-    "Search",
+    U"Search",
     trash_input_c_tex,
     download_from_search
   );
@@ -110,7 +110,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         if (data.playlist_names_cache.size() <= i)
           data.playlist_names_cache.resize(i + 1);
 
-        data.playlist_names_cache[i] = std::make_unique<InputComponent>(window, "playlist_name_" + std::to_string(i), playlist_name_text_reference, large_font_size);
+        data.playlist_names_cache[i] = std::make_unique<InputComponent>(window, "playlist_name_" + std::to_string(i), playlist_name_text_reference, large_font_size, true);
       }
 
       auto& playlist_name = data.playlist_names_cache[i];
