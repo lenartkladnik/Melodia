@@ -17,18 +17,19 @@
 std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
   reset_globals();
 
-  auto trash_input_c_tex = load_texture("download.png");
+  auto download_tex = load_texture("download.png");
 
   float search_size_x = 600.f;
-  auto search = std::make_shared<InputComponent>(
-    window,
-    "playlist_search_input_c", // id
-    sf::Vector2f{search_size_x, 40.f}, // size
-    sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f}, // position
-    U"Search",
-    trash_input_c_tex,
-    download_from_search
-  );
+  auto search = std::make_shared<InputComponent>(InputComponent::Args::InputField{
+    .render_window = window,
+    .id = "playlist_search_input_c",
+    .size = sf::Vector2f{search_size_x, 40.f},
+    .pos = sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f},
+    .prompt = U"Search",
+    .action_tex = download_tex,
+    .action_function = download_from_search,
+    .no_focus_event_else = true
+  });
 
   auto playlists = get_all_playlists();
 
@@ -110,7 +111,13 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         if (data.playlist_names_cache.size() <= i)
           data.playlist_names_cache.resize(i + 1);
 
-        data.playlist_names_cache[i] = std::make_unique<InputComponent>(window, "playlist_name_" + std::to_string(i), playlist_name_text_reference, large_font_size, true);
+        data.playlist_names_cache[i] = std::make_unique<InputComponent>(InputComponent::Args::TextReplica{
+          .render_window = window,
+          .id = "playlist_name_" + std::to_string(i),
+          .text_reference = playlist_name_text_reference,
+          .font_size = large_font_size,
+          .select_all_on_click = true
+        });
       }
 
       auto& playlist_name = data.playlist_names_cache[i];
@@ -212,16 +219,16 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     });
 
     // On click on this area refocus search if it was just focused
-    AreaComponent search_res_area(
-      "search_res_area",
-      search_results_background.getGlobalBounds(),
-      [](MenuData& menu_data){
+    AreaComponent search_res_area(AreaComponent::Args::Area{
+      .id = "search_res_area",
+      .bounds = search_results_background.getGlobalBounds(),
+      .function = [](MenuData& menu_data){
         if (search_was_active)
           std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->focus({-1, -1}); // {-1, -1} since the position won't be changed anyway
       },
-      false,
-      ON_TOP
-    );
+      .permanent = false,
+      .rank = ON_TOP
+    });
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
 

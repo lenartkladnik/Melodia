@@ -196,15 +196,13 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   });
 
 
-  auto search = std::make_shared<InputComponent>(
-    window,
-    "player_search_input_c", // id
-    sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f}, // size
-    sf::Vector2f{50.f, queue_background.getPosition().y + 10.f}, // position
-    U"Search",
-    nullptr,
-    [](MenuData&){}
-  );
+  auto search = std::make_shared<InputComponent>(InputComponent::Args::InputField{
+    .render_window = window,
+    .id = "player_search_input_c",
+    .size = sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f},
+    .pos = sf::Vector2f{50.f, queue_background.getPosition().y + 10.f},
+    .prompt = U"Search"
+  });
 
   // new_click_event(click_events, [](MenuData& menu_data) {
   //   std::get<MenuData::PlayerData>(menu_data.data).data->search.clear_input();

@@ -94,47 +94,63 @@ class InputComponent : public UIComponent {
     bool selecting = false;
     sf::RoundedRectangleShape selection_background;
     std::u32string selected_text;
-    bool text_lookalike = false;
+    bool text_replica = false;
     bool select_all_on_click = false;
+    bool focus_event_else_is_empty = false;
 
   public:
-    // Standard input component
-    InputComponent(
-      sf::RenderWindow& render_window,
-      std::string id,
-      sf::Vector2f input_size,
-      sf::Vector2f input_pos,
-      std::u32string prompt,
-      std::shared_ptr<sf::Texture> action_tex,
-      std::function<void(MenuData&)> action_function,
-      float corner_radius = 20,
-      bool hidden = false
-    )
-      : UIComponent(id, hidden),
-        window(render_window),
-        input_prompt(prompt),
-        corner_radius(corner_radius),
-        input_text(default_font, prompt, 20)
+    // Arguments for constructors
+    struct Args {
+      struct InputField {
+        sf::RenderWindow& render_window;
+        std::string id;
+        sf::Vector2f size;
+        sf::Vector2f pos;
+        std::u32string prompt = U"";
+        std::shared_ptr<sf::Texture> action_tex = nullptr;
+        std::function<void(MenuData&)> action_function = [](MenuData&){};
+        float corner_radius = 20;
+        bool hidden = false;
+        bool no_focus_event_else = false;
+      };
+
+      struct TextReplica {
+        sf::RenderWindow& render_window;
+        std::string id;
+        std::shared_ptr<sf::Text> text_reference;
+        float font_size;
+        bool select_all_on_click = false;
+      };
+    };
+
+    // Input field input component
+    InputComponent(Args::InputField arguments)
+      : UIComponent(arguments.id, arguments.hidden),
+        window(arguments.render_window),
+        input_prompt(arguments.prompt),
+        corner_radius(arguments.corner_radius),
+        input_text(default_font, arguments.prompt, 20),
+        focus_event_else_is_empty(arguments.no_focus_event_else)
 
     {
-      component_id = id;
+      component_id = arguments.id;
 
-      if (action_tex) {
-        action_button_tex = action_tex;
+      if (arguments.action_tex) {
+        action_button_tex = arguments.action_tex;
         action_button.emplace(*action_button_tex);
       }
 
       input_string = U"";
       cursor_pos = 0;
 
-      input_background.setSize(input_size);
+      input_background.setSize(arguments.size);
       input_background.setCornerPointCount(main_n);
-      input_background.setPosition(input_pos);
+      input_background.setPosition(arguments.pos);
       input_background.setFillColor(light_background_color);
       background_reset_corner_radii();
 
       input_shadow.setSize({input_background.getGlobalBounds().size.x + 5.f, input_background.getGlobalBounds().size.y + 5.f});
-      input_shadow.setCornersRadius(corner_radius);
+      input_shadow.setCornersRadius(arguments.corner_radius);
       input_shadow.setCornerPointCount(main_n);
       input_shadow.setPosition({input_background.getPosition().x - 2.5f, input_background.getPosition().y + 3.f});
       input_shadow.setFillColor(dark_main_color);
@@ -152,7 +168,7 @@ class InputComponent : public UIComponent {
           input_background.getPosition().y + 5.f
         });
 
-        register_action(action_function);
+        register_action(arguments.action_function);
       }
 
       selection_background.setFillColor(selection_color);
@@ -165,7 +181,9 @@ class InputComponent : public UIComponent {
             focus(pos);
         },
         [this](MenuData&) {
-          unfocus();
+          if (!this->focus_event_else_is_empty) {
+            unfocus();
+          }
         },
         input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
 
@@ -177,39 +195,33 @@ class InputComponent : public UIComponent {
         },
         sf::Mouse::Button::Left, this);
 
-      ctrl_c_signal.connect(id, [this](){this->copy();});
-      ctrl_v_signal.connect(id, [this](){this->paste();});
-      ctrl_a_signal.connect(id, [this](){this->select_all();});
+      ctrl_c_signal.connect(arguments.id, [this](){this->copy();});
+      ctrl_v_signal.connect(arguments.id, [this](){this->paste();});
+      ctrl_a_signal.connect(arguments.id, [this](){this->select_all();});
     }
 
-    // Text lookalike input component
-    InputComponent(
-      sf::RenderWindow& render_window,
-      std::string id,
-      std::shared_ptr<sf::Text> text_reference,
-      float font_size,
-      bool select_all_on_click = false
-    )
-      : UIComponent(id),
-        window(render_window),
-        input_prompt(text_reference->getString().toUtf32()),
-        input_text(default_font, text_reference->getString(), 20),
-        select_all_on_click(select_all_on_click)
+    // Text replica input component
+    InputComponent(Args::TextReplica arguments)
+      : UIComponent(arguments.id),
+        window(arguments.render_window),
+        input_prompt(arguments.text_reference->getString().toUtf32()),
+        input_text(default_font, arguments.text_reference->getString(), 20),
+        select_all_on_click(arguments.select_all_on_click)
     {
-      component_id = id;
-      text_lookalike = true;
+      component_id = arguments.id;
+      text_replica = true;
 
-      input_string = text_reference->getString().toUtf32();
+      input_string = arguments.text_reference->getString().toUtf32();
       cursor_pos = 0;
 
-      input_background.setPosition({text_reference->getPosition().x, text_reference->getPosition().y - 5.f});
+      input_background.setPosition({arguments.text_reference->getPosition().x, arguments.text_reference->getPosition().y - 5.f});
       input_background.setCornerPointCount(main_n);
-      input_background.setSize({text_reference->getGlobalBounds().size.x, text_reference->getGlobalBounds().size.y + 10.f});
+      input_background.setSize({arguments.text_reference->getGlobalBounds().size.x, arguments.text_reference->getGlobalBounds().size.y + 10.f});
       update_input_component_size();
 
       input_text.setFillColor(text_color);
-      setFontSize(input_text, font_size);
-      input_text.setPosition(text_reference->getPosition());
+      setFontSize(input_text, arguments.font_size);
+      input_text.setPosition(arguments.text_reference->getPosition());
 
       selection_background.setFillColor(selection_color);
       selection_background.setCornerPointCount(main_n);
@@ -223,9 +235,9 @@ class InputComponent : public UIComponent {
         },
       sf::Mouse::Button::Left, this);
 
-      ctrl_c_signal.connect(id, [this](){this->copy();});
-      ctrl_v_signal.connect(id, [this](){this->paste();});
-      ctrl_a_signal.connect(id, [this](){this->select_all();});
+      ctrl_c_signal.connect(arguments.id, [this](){this->copy();});
+      ctrl_v_signal.connect(arguments.id, [this](){this->paste();});
+      ctrl_a_signal.connect(arguments.id, [this](){this->select_all();});
     }
 
     InputComponent() = delete;
@@ -250,7 +262,7 @@ class InputComponent : public UIComponent {
 
     void draw() {
       if (!is_hidden()) {
-        if (text_lookalike) {
+        if (text_replica) {
           if (selection_start != std::string::npos) {
             if (selecting)
               select();
@@ -276,7 +288,7 @@ class InputComponent : public UIComponent {
     }
 
     void update_input_component_size() {
-      if (text_lookalike) {
+      if (text_replica) {
         input_background.setSize({input_text.getGlobalBounds().size.x, input_background.getGlobalBounds().size.y});
 
         remove_if_event(focus_events, component_id);
@@ -287,7 +299,9 @@ class InputComponent : public UIComponent {
               focus(pos);
           },
           [this](MenuData&) {
-            unfocus();
+            if (!this->focus_event_else_is_empty) {
+              unfocus();
+            }
           },
         input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
       }
@@ -430,7 +444,7 @@ class InputComponent : public UIComponent {
       show_cursor = false;
 
       if (input_string.size() == 0) {
-        if (!text_lookalike) {
+        if (!text_replica) {
           input_text.setFillColor(light_text_color);
         } else {
           input_string = input_prompt; // text lookalikes treat deleting the whole string as "canceling", so the string is set to the default
@@ -581,6 +595,58 @@ class ButtonComponent : public UIComponent {
     sf::Color m_button_shape_color;
 
   public:
+    struct Args {
+      struct BasicButton {
+        sf::RenderWindow& render_window;
+        std::string id;
+        std::string text;
+        sf::Vector2f size;
+        sf::Vector2f pos;
+        std::function<void(MenuData&)> function;
+        bool hidden = false;
+        sf::Color button_shape_color = dark_background_color;
+        sf::Color button_text_color = text_color;
+        int corner_radius = 10;
+      };
+    };
+
+    ButtonComponent(Args::BasicButton arguments)
+      : UIComponent(arguments.id, arguments.hidden),
+        window(arguments.render_window),
+        button_text(default_font, arguments.text, 0),
+        function(arguments.function),
+        m_button_shape_color(arguments.button_shape_color)
+    {
+      button_shape.setSize(arguments.size);
+      button_shape.setPosition(arguments.pos);
+      button_shape.setFillColor(arguments.button_shape_color);
+      button_shape.setCornersRadius(arguments.corner_radius);
+      button_shape.setCornerPointCount(main_n);
+
+      int text_size = 0;
+      if (arguments.text.size() != 0)
+        text_size = (int)((arguments.size.x/arguments.text.size()) * font_multiplier);
+
+      setFontSize(button_text, text_size);
+      button_text.setFillColor(arguments.button_text_color);
+      button_text.setPosition({
+        button_shape.getPosition().x + button_shape.getGlobalBounds().size.x / 2 - button_text.getGlobalBounds().size.x / 2,
+        button_shape.getPosition().y + button_shape.getGlobalBounds().size.y / 2 - button_text.getGlobalBounds().size.y
+      });
+
+      new_click_event(click_events, arguments.id, [this](MenuData& menu_data) { if (!is_hidden()) this->function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
+    }
+
+    ~ButtonComponent() = default;
+
+    // Disallow copy
+    ButtonComponent(const ButtonComponent&) = delete;
+    ButtonComponent& operator=(const ButtonComponent&) = delete;
+
+    // Disallow move
+    ButtonComponent(ButtonComponent&&) = delete;
+    ButtonComponent& operator=(ButtonComponent&&) = delete;
+
     void draw() {
       if (!is_hidden()) {
         window.draw(button_shape);
@@ -603,54 +669,6 @@ class ButtonComponent : public UIComponent {
     sf::FloatRect button_bounds() {
       return button_shape.getGlobalBounds();
     }
-
-    ButtonComponent(
-      sf::RenderWindow& render_window,
-      std::string id,
-      std::string text,
-      sf::Vector2f size,
-      sf::Vector2f pos,
-      std::function<void(MenuData&)> function,
-      bool hidden = false,
-      sf::Color button_shape_color = dark_background_color,
-      sf::Color button_text_color = text_color,
-      int corner_radius = 10
-    )
-      : UIComponent(id, hidden),
-        window(render_window),
-        button_text(default_font, text, 0),
-        function(function),
-        m_button_shape_color(button_shape_color)
-    {
-      button_shape.setSize(size);
-      button_shape.setPosition(pos);
-      button_shape.setFillColor(button_shape_color);
-      button_shape.setCornersRadius(corner_radius);
-      button_shape.setCornerPointCount(main_n);
-
-      int text_size = 0;
-      if (text.size() != 0)
-        text_size = (int)((size.x/text.size()) * font_multiplier);
-
-      setFontSize(button_text, text_size);
-      button_text.setFillColor(button_text_color);
-      button_text.setPosition({
-        button_shape.getPosition().x + button_shape.getGlobalBounds().size.x / 2 - button_text.getGlobalBounds().size.x / 2,
-        button_shape.getPosition().y + button_shape.getGlobalBounds().size.y / 2 - button_text.getGlobalBounds().size.y
-      });
-
-      new_click_event(click_events, id, [this, function](MenuData& menu_data) { if (!is_hidden()) function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
-    }
-
-    ~ButtonComponent() = default;
-
-  // Disallow copy
-  ButtonComponent(const ButtonComponent&) = delete;
-  ButtonComponent& operator=(const ButtonComponent&) = delete;
-
-  // Disallow move
-  ButtonComponent(ButtonComponent&&) = delete;
-  ButtonComponent& operator=(ButtonComponent&&) = delete;
 };
 
 class PopupComponent : public UIComponent {
@@ -660,6 +678,28 @@ class PopupComponent : public UIComponent {
     std::unordered_map<std::string, sf::RoundedRectangleShape> rounded_rectangle_shapes;
 
   public:
+    static PopupComponent* Create(std::string id) {
+      auto instance = std::make_shared<PopupComponent>(id);
+      PopupComponent* ptr = instance.get();
+
+      popup_components.insert({id, std::move(instance)});
+
+      return ptr;
+    }
+
+    PopupComponent(std::string id)
+      : UIComponent(id) {}
+
+    ~PopupComponent() = default; // Popup id gets erased by itself which causes the pointers to be freed
+
+    // Disallow copy
+    PopupComponent(const PopupComponent&) = delete;
+    PopupComponent& operator=(const PopupComponent&) = delete;
+
+    // Disallow move
+    PopupComponent(PopupComponent&&) = delete;
+    PopupComponent& operator=(PopupComponent&&) = delete;
+
     void draw() {
       if (!is_hidden()) {
         draw_rounded_rectangle_shapes();
@@ -743,28 +783,6 @@ class PopupComponent : public UIComponent {
         it->second->show();
       }
     }
-
-    static PopupComponent* Create(std::string id) {
-      auto instance = std::make_shared<PopupComponent>(id);
-      PopupComponent* ptr = instance.get();
-
-      popup_components.insert({id, std::move(instance)});
-
-      return ptr;
-    }
-
-    PopupComponent(std::string id)
-      : UIComponent(id) {}
-
-    ~PopupComponent() = default; // Popup id gets erased by itself which causes the pointers to be freed
-
-  // Disallow copy
-  PopupComponent(const PopupComponent&) = delete;
-  PopupComponent& operator=(const PopupComponent&) = delete;
-
-  // Disallow move
-  PopupComponent(PopupComponent&&) = delete;
-  PopupComponent& operator=(PopupComponent&&) = delete;
 };
 
 class AreaComponent : public UIComponent {
@@ -772,17 +790,21 @@ class AreaComponent : public UIComponent {
     sf::FloatRect m_bounds;
 
   public:
-    AreaComponent(
-      std::string id,
-      sf::FloatRect bounds,
-      std::function<void(MenuData&)> function,
-      bool permanent = true,
-      int rank = 0
-    )
-      : UIComponent(id),
-      m_bounds(bounds)
+    struct Args {
+      struct Area {
+        std::string id;
+        sf::FloatRect bounds;
+        std::function<void(MenuData&)> function;
+        bool permanent = true;
+        int rank = 0;
+      };
+    };
+
+    AreaComponent(Args::Area arguments)
+      : UIComponent(arguments.id),
+      m_bounds(arguments.bounds)
     {
-      new_click_event(click_events, id, function, m_bounds, sf::Mouse::Button::Left, permanent ? this : nullptr, default_view, rank);
+      new_click_event(click_events, arguments.id, arguments.function, m_bounds, sf::Mouse::Button::Left, arguments.permanent ? this : nullptr, default_view, arguments.rank);
     }
 
     ~AreaComponent() = default;

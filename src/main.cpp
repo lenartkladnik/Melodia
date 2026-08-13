@@ -187,8 +187,8 @@ int main() {
             auto pos = window.mapPixelToCoords(e->position, item->view);
             item->function(menu_data, pos);
           },
-          [](const auto*, auto* item){
-            item->component->unfocus();
+          [&](const auto*, auto* item){
+            item->else_function(menu_data);
           }
         );
 
