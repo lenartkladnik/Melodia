@@ -64,30 +64,8 @@ int main() {
     throw std::runtime_error("Failed to resize window render texture.");
   }
 
-  if (!no_invert_mask.resize(window_base_size)) {
-    throw std::runtime_error("Failed to resize no_invert_mask render texture.");
-  }
-
   set_window(sf::State::Windowed);
   std::setlocale(LC_ALL, "en_US.UTF-8");
-
-  if (!invert_shader.loadFromMemory(R"(
-    uniform sampler2D texture;
-    uniform sampler2D mask;
-
-    void main() {
-        vec4 pixel = texture2D(texture, gl_TexCoord[0].xy);
-        float m = texture2D(mask, gl_TexCoord[0].xy).r;
-
-        float gray = dot(pixel.rgb, vec3(0.299, 0.587, 0.114));
-        vec3 inverted = vec3(1.0 - gray);
-
-        vec3 result = mix(inverted, pixel.rgb, m);
-        gl_FragColor = vec4(result, pixel.a);
-    }
-  )", sf::Shader::Type::Fragment)) {
-    throw std::runtime_error("Failed to load 'invert' fragment shader from memory.");
-  }
 
   render_window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
@@ -168,13 +146,8 @@ int main() {
         default_view.setCenter({window_size.x / 2.f, window_size.y / 2.f});
         render_window.setView(default_view);
         window.setView(default_view);
-        no_invert_mask.setView(default_view);
         if (!window.resize(resized->size)) {
           throw std::runtime_error("Failed to resize window render texture.");
-        }
-
-        if (!no_invert_mask.resize(resized->size)) {
-          throw std::runtime_error("Failed to resize no_invert_mask render texture.");
         }
 
         switch (menu_data.type) {

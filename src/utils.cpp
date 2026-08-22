@@ -57,21 +57,10 @@ void set_window(sf::State state) {
 }
 
 void draw_window(sf::RenderWindow& render_window, sf::RenderTexture& window) {
-  no_invert_mask.display();
-
-  invert_shader.setUniform("texture", sf::Shader::CurrentTexture);
-  invert_shader.setUniform("mask", no_invert_mask.getTexture());
-
   window.display();
   sf::Sprite scene(window.getTexture());
 
-  render_window.clear();
-
-  if (dark_mode) {
-    render_window.draw(scene, &invert_shader);
-  } else {
-    render_window.draw(scene);
-  }
+  render_window.draw(scene);
 
   render_window.display();
 }

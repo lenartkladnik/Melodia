@@ -407,17 +407,12 @@ void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf:
   vol_slider_full.setFillColor({10, 10, 10});
 
   window.clear(main_color);
-  no_invert_mask.clear(sf::Color::Black); // black means apply shader
 
   window.draw(player_data.player_shadow_background);
   window.draw(player_data.player_background);
 
   window.draw(player_data.cover_shadow);
   window.draw(player_data.cover);
-  sf::RoundedRectangleShape cover_art_mask(player_data.cover.getGlobalBounds().size, player_data.cover.getCornersRadius(0), main_n);
-  cover_art_mask.setPosition(player_data.cover.getGlobalBounds().position);
-  cover_art_mask.setFillColor(sf::Color::White); // white means don't apply shader
-  no_invert_mask.draw(cover_art_mask);
 
   window.draw(*player_data.artist);
   window.draw(*player_data.title);

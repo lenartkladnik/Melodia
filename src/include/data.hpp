@@ -62,7 +62,6 @@ extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings window_settings;
 extern sf::RenderWindow render_window;
 extern sf::RenderTexture window;
-extern sf::RenderTexture no_invert_mask;
 extern sf::Vector2f window_size;
 extern sf::View default_view;
 extern bool is_fullscreen;
@@ -119,8 +118,6 @@ extern bool search_was_active;
 
 extern std::random_device rd;
 extern std::mt19937 rand_generator;
-
-extern sf::Shader invert_shader;
 
 class MusicPlayer {
   public:

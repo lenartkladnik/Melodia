@@ -64,7 +64,6 @@ const sf::Vector2u window_base_size({1920, 1080});
 const sf::ContextSettings window_settings{.antiAliasingLevel = 8};
 sf::RenderWindow render_window;
 sf::RenderTexture window;
-sf::RenderTexture no_invert_mask;
 sf::Vector2f window_size = {static_cast<float>(render_window.getSize().x), static_cast<float>(render_window.getSize().y)};
 sf::View default_view = render_window.getDefaultView();
 bool is_fullscreen;
@@ -140,5 +139,3 @@ bool search_was_active = false;
 
 std::random_device rd;
 std::mt19937 rand_generator(rd());
-
-sf::Shader invert_shader;

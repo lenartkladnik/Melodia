@@ -53,7 +53,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   auto& data = *playlist_sel.data;
 
   window.clear(main_color);
-  no_invert_mask.clear(sf::Color::Black); // black means apply shader
 
   // Drag and drop area  TODO: Make this scrollable
   sf::Vector2f playlist_drop_area_gap(60.f, 280.f);
@@ -114,11 +113,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       if (cover_dt.drawformable->getGlobalBounds().contains(mouse_pos)) {
         // TODO: Hover effect
       }
-
-      sf::RoundedRectangleShape cover_art_mask(cover_dt.drawformable->getGlobalBounds().size, cover_round, main_n);
-      cover_art_mask.setPosition(cover_dt.drawformable->getGlobalBounds().position);
-      cover_art_mask.setFillColor(sf::Color::White); // white means don't apply shader
-      no_invert_mask.draw(cover_art_mask);
 
       data.drawables_cache.draw(i, window);
 
@@ -194,7 +188,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     data.drawables_cache.add(i, "sel_background_shadow", DTPair{std::make_shared<DrawformableObject>(sel_background_shadow, sel_background_shadow), nullptr});
     data.drawables_cache.add(i, "sel_background", DTPair{std::make_shared<DrawformableObject>(sel_background, sel_background), nullptr});
     data.drawables_cache.add(i, "playlist_size", DTPair{std::make_shared<DrawformableObject>(playlist_size, playlist_size), nullptr});
-    data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture}); // no-invert in the name causes the invert shader to be applied twice if dark mode is on and zero times if it is off
+    data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture});
   }
 
 
@@ -311,13 +305,11 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       sf::Vector2f search_result_pos;
       if (search_res_id == dragging_search_result) {
         window.setView(default_view);
-        no_invert_mask.setView(default_view);
         search_result_pos = static_cast<sf::Vector2f>(sf::Mouse::getPosition(render_window));
         search_result_pos.x -= search_result_size.x / 2;
         search_result_pos.y -= search_result_size.y / 2;
       } else {
         window.setView(search_results_view);
-        no_invert_mask.setView(search_results_view);
         search_result_pos = sf::Vector2f(search_results_background.getPosition().x + 10.f, last_y_pos);
       }
 
@@ -327,11 +319,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         search_result_size,
         search_res_id == dragging_search_result
       );
-
-      sf::RoundedRectangleShape cover_art_mask(search_result->cover.getGlobalBounds().size, search_result->cover.getCornersRadius(0), main_n);
-      cover_art_mask.setPosition(search_result->cover.getGlobalBounds().position);
-      cover_art_mask.setFillColor(sf::Color::White); // white means don't apply shader
-      no_invert_mask.draw(cover_art_mask);
 
       draw_small_song_container(search_result);
 
@@ -400,7 +387,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     search_results = search_results_before;
     window.setView(default_view);
-    no_invert_mask.setView(default_view);
   }
   else {
     search_was_active = false;
