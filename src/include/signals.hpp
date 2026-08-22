@@ -29,8 +29,13 @@ class Signal {
     }
 };
 
-extern Signal ctrl_c_signal;
-extern Signal ctrl_v_signal;
-extern Signal ctrl_a_signal;
+extern Signal copy_signal;
+extern Signal paste_signal;
+extern Signal select_all_signal;
+extern Signal play_toggle_signal;
+extern Signal confirm_signal;
+extern Signal left_signal;
+extern Signal right_signal;
+extern Signal escape_signal;
 
 #endif

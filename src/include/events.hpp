@@ -27,8 +27,9 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
   for (auto& item: items) {
     if (item.bounds.contains(window.mapPixelToCoords(e->position, item.view)) && predicate(e, item)) {
       if (item.component) {
-        if (!item.component->is_hidden() && (item.component->z_index > max_z_index)) {
-          max_z_index = item.component->z_index;
+        auto rank = std::max(item.component->z_index, item.rank);
+        if (!item.component->is_hidden() && (rank > max_z_index)) {
+          max_z_index = rank;
           best_item = &item;
         }
       } else if (!item.disabled && (item.rank > max_z_index)) {
@@ -38,11 +39,14 @@ void on(const sf::Event& event, TContainer& items, TPredicate predicate, THandle
     }
   }
 
+  if (best_item)
+    std::cout << "[INFO] Clicked on '" << best_item->id << "'.\n";
+
   // handle best item and unfocus all other items
   for (size_t i = 0; i < items.size(); i++) { // This kind of loop is required since the container can be mutated while it is being iterated
     auto& item = items[i];
     if (&item == best_item)
-      handle(e, best_item);
+      handle(e, &item);
 
     else
       handle_else(e, &item);
@@ -158,8 +162,8 @@ void new_focus_event(
 );
 
 struct ScrollEvent : UIEvent {
-  float scroll_offset;
-  bool can_scroll;
+  float* scroll_offset;
+  bool* can_scroll;
 };
 
 extern std::vector<ScrollEvent> scroll_events;
@@ -167,8 +171,8 @@ void new_scroll_event(
   std::vector<ScrollEvent>& container,
   std::string id,
   sf::FloatRect bounds,
-  float& scroll_offset,
-  bool& can_scroll,
+  float* scroll_offset,
+  bool* can_scroll,
   UIComponent* component = nullptr,
   int rank = 0
 );

@@ -4,7 +4,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cmath>
-#include "../external/lib/RoundedRectangleShape.hpp"
+
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/animation.hpp"
@@ -14,7 +14,9 @@
 #include "include/storage_handler.hpp"
 #include "include/events.hpp"
 
-std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const std::string& song_path, int id, const std::string& playlist) {
+#include "../external/lib/RoundedRectangleShape.hpp"
+
+std::shared_ptr<StaticPlayerData> init_player(sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data, const std::string& song_path, int id, const std::string& playlist) {
   reset_globals();
 
   auto half = (float)(window_size.x / 2);
@@ -65,20 +67,20 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   // Player controls
 
-  auto play_tex = load_texture("play.png");
-  auto pause_tex = load_texture("pause.png");
+  auto play_tex = load_texture("play");
+  auto pause_tex = load_texture("pause");
 
   // Play / pause button
   sf::Sprite main_control(*play_tex);
   main_control.setPosition({(float)(half - main_control.getGlobalBounds().size.x / 2), padding_top + cover_size + offset + 60.f});
 
-  auto next_tex = load_texture("next.png");
+  auto next_tex = load_texture("next");
 
   // Skip to next song button
   sf::Sprite next_control(*next_tex);
   next_control.setPosition({main_control.getPosition().x + 40.f, main_control.getPosition().y});
 
-  auto previous_tex = load_texture("previous.png");
+  auto previous_tex = load_texture("previous");
 
   // Skip to previous song button
   sf::Sprite previous_control(*previous_tex);
@@ -108,16 +110,16 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   progress_shadow.setPosition({progress.getPosition().x + 5.f, progress.getPosition().y + 5.f});
   progress_shadow.setFillColor(background_shadow_color);
 
-  auto live_empty_tex = load_texture("live_empty.png");
-  auto live_full_tex = load_texture("live_full.png");
+  auto live_empty_tex = load_texture("live_empty");
+  auto live_full_tex = load_texture("live_full");
 
   // Live mode button
   sf::Sprite live(*live_empty_tex);
   live.setPosition({progress.getPosition().x + progress.getGlobalBounds().size.x - live.getGlobalBounds().size.x, main_control.getPosition().y});
 
-  auto volume_tex = load_texture("volume.png");
+  auto volume_tex = load_texture("volume");
 
-  auto mute_tex = load_texture("mute.png");
+  auto mute_tex = load_texture("mute");
 
   // Volume slider and icon next to the volume slider
   sf::Sprite vol_icon(*volume_tex);
@@ -134,13 +136,20 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
 
   // The controls in the upper rightish corner of the screen
 
-  sf::RoundedRectangleShape control_corner({190.f, 50.f}, out_round, main_n);
+  auto favorite_empty_tex = load_texture("favorite_empty");
+  auto favorite_full_tex = load_texture("favorite_full");
+
+  sf::Sprite favorite(*favorite_empty_tex);
+
+  sf::RoundedRectangleShape control_corner({favorite.getGlobalBounds().size.x + control_corner_gap * 2, favorite.getGlobalBounds().size.y + control_corner_gap}, out_round, main_n);
   control_corner.setPosition({window_size.x - control_corner.getGlobalBounds().size.x - 20.f, -10.f});
   control_corner.setFillColor(background_color);
 
   sf::RoundedRectangleShape control_corner_shadow(control_corner.getGlobalBounds().size, out_round, main_n);
-  control_corner_shadow.setPosition({control_corner.getPosition().x + shadow_offset, control_corner.getPosition().y + shadow_offset});
+  control_corner_shadow.setPosition({control_corner.getPosition().x + shadow_offset / 2.f, control_corner.getPosition().y + shadow_offset / 2.f});
   control_corner_shadow.setFillColor(dark_main_color);
+
+  favorite.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
 
   // Queue
@@ -153,38 +162,18 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   queue_background_shadow.setPosition({queue_background.getPosition().x + shadow_offset, queue_background.getPosition().y + shadow_offset});
   queue_background_shadow.setFillColor(dark_main_color);
 
-  auto side_expand_tex = load_texture("side_expand.png");
+  auto side_expand_tex = load_texture("side_expand");
 
-  auto side_contract_tex = load_texture("side_contract.png");
+  auto side_contract_tex = load_texture("side_contract");
 
   sf::Sprite queue_toggle(*side_expand_tex);
   queue_toggle.setPosition({0.f, queue_background.getPosition().y + 6.f});
 
-  // Items in the control corner
 
-  auto favorite_empty_tex = load_texture("favorite_empty.png");
-  auto favorite_full_tex = load_texture("favorite_full.png");
-
-  sf::Sprite favorite(*favorite_empty_tex);
-  favorite.setPosition({control_corner.getPosition().x + control_corner_gap, control_corner.getPosition().y + 12.f});
-
-  auto manage_playlist_tex = load_texture("manage_playlist.png");
-
-  sf::Sprite manage_playlist(*manage_playlist_tex);
-  manage_playlist.setPosition({favorite.getPosition().x + favorite.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
+  auto manage_playlist_tex = load_texture("manage_playlist");
 
   sf::Sprite playlist_selector(*manage_playlist_tex);
   playlist_selector.setPosition({queue_toggle.getPosition().x + 8.f, queue_toggle.getPosition().y + queue_toggle.getGlobalBounds().size.y + 6.f});
-
-  auto trash_tex = load_texture("trash.png");
-
-  sf::Sprite trash(*trash_tex);
-  trash.setPosition({manage_playlist.getPosition().x + manage_playlist.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
-
-  auto edit_tex = load_texture("edit.png");
-
-  sf::Sprite edit(*edit_tex);
-  edit.setPosition({trash.getPosition().x + trash.getGlobalBounds().size.x + control_corner_gap, control_corner.getPosition().y + 12.f});
 
   // Little text at the bottom of the queue
   sf::Text playlist_data(default_font, "");
@@ -196,8 +185,9 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   });
 
 
-  auto search = std::make_shared<InputComponent>(InputComponent::Args::InputField{
-    .render_window = window,
+  auto search = std::make_shared<InputComponent>(menu_data, InputComponent::Args::InputField{
+    .window = window,
+    .render_window = render_window,
     .id = "player_search_input_c",
     .size = sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f},
     .pos = sf::Vector2f{50.f, queue_background.getPosition().y + 10.f},
@@ -234,18 +224,6 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, previous_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "trash", [](MenuData&) {
-    // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
-
-    std::cout << "TODO: Delete song" << std::endl;
-  }, trash.getGlobalBounds(), sf::Mouse::Button::Left);
-
-  new_click_event(click_events, "manage_playlist", [](MenuData&) {
-    // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
-
-    std::cout << "TODO: Manage playlist popup" << std::endl;
-  }, manage_playlist.getGlobalBounds(), sf::Mouse::Button::Left);
-
   new_click_event(click_events, "favorite", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
@@ -259,12 +237,6 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
       player.data->favorite->setTexture(*player.data->favorite_empty_tex);
     }
   }, favorite.getGlobalBounds(), sf::Mouse::Button::Left);
-
-  new_click_event(click_events, "edit", [](MenuData&) {
-    // auto& player = std::get<MenuData::PlayerData>(menu_data.data);
-
-    std::cout << "TODO: Edit song" << std::endl;
-  }, edit.getGlobalBounds(), sf::Mouse::Button::Left);
 
   new_click_event(click_events, "progress", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
@@ -351,8 +323,8 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
     }
   }, live.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "playlist_selector", [&window](MenuData& menu_data) {
-    switch_to_playlist_selector(menu_data, window);
+  new_click_event(click_events, "playlist_selector", [&](MenuData& menu_data) {
+    switch_to_playlist_selector(menu_data, window, render_window);
   }, playlist_selector.getGlobalBounds(), sf::Mouse::Button::Left);
 
   auto data = std::make_shared<StaticPlayerData>();
@@ -362,10 +334,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   data->previous_control = std::move(previous_control);
   data->queue_toggle = std::move(queue_toggle);
   data->favorite = std::move(favorite);
-  data->manage_playlist = std::move(manage_playlist);
   data->playlist_selector = std::move(playlist_selector);
-  data->trash = std::move(trash);
-  data->edit = std::move(edit);
   data->vol_icon = std::move(vol_icon);
   data->live = std::move(live);
   data->artist = std::move(artist);
@@ -386,12 +355,10 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   data->previous_tex = previous_tex;
   data->control_corner = std::move(control_corner);
   data->control_corner_shadow = std::move(control_corner_shadow);
-  data->trash_tex = trash_tex;
   data->playlist = playlist;
   data->manage_playlist_tex = manage_playlist_tex;
   data->favorite_empty_tex = favorite_empty_tex;
   data->favorite_full_tex = favorite_full_tex;
-  data->edit_tex = edit_tex;
   data->queue_background = std::move(queue_background);
   data->queue_background_shadow = std::move(queue_background_shadow);
   data->search_placeholder_active = true;
@@ -408,7 +375,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderWindow& window, const st
   return data;
 }
 
-void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
+void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf::RenderWindow&) {
   global_z_index = 0;
 
   auto& player_data = *player.data;
@@ -440,34 +407,42 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
   vol_slider_full.setFillColor({10, 10, 10});
 
   window.clear(main_color);
+  no_invert_mask.clear(sf::Color::Black); // black means apply shader
 
   window.draw(player_data.player_shadow_background);
   window.draw(player_data.player_background);
+
   window.draw(player_data.cover_shadow);
   window.draw(player_data.cover);
+  sf::RoundedRectangleShape cover_art_mask(player_data.cover.getGlobalBounds().size, player_data.cover.getCornersRadius(0), main_n);
+  cover_art_mask.setPosition(player_data.cover.getGlobalBounds().position);
+  cover_art_mask.setFillColor(sf::Color::White); // white means don't apply shader
+  no_invert_mask.draw(cover_art_mask);
+
   window.draw(*player_data.artist);
   window.draw(*player_data.title);
+
   window.draw(player_data.progress_shadow);
   window.draw(player_data.progress);
   window.draw(progress_done);
   window.draw(time_left);
+
   window.draw(*main_control);
   window.draw(*player_data.next_control);
   window.draw(*player_data.previous_control);
+
   window.draw(*player_data.vol_icon);
   window.draw(player_data.vol_slider_shadow);
   window.draw(player_data.vol_slider);
   if (volume > slider_threshold) {
     window.draw(vol_slider_full);
   }
+
   window.draw(*player_data.live);
 
   window.draw(player_data.control_corner_shadow);
   window.draw(player_data.control_corner);
-  window.draw(*player_data.trash);
-  window.draw(*player_data.manage_playlist);
   window.draw(*player_data.favorite);
-  window.draw(*player_data.edit);
 
   window.draw(player_data.queue_background_shadow);
   window.draw(player_data.queue_background);
@@ -539,7 +514,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       }
 
       // Calculate the apparent index of the dragging queue entry
-      auto relative_pos = (get_mouse_pos(window).y - queue_entry_background.getGlobalBounds().size.y / 2) / player_data.queue_background.getGlobalBounds().size.y;
+      auto relative_pos = (get_mouse_pos(render_window).y - queue_entry_background.getGlobalBounds().size.y / 2) / player_data.queue_background.getGlobalBounds().size.y;
       if (relative_pos > 1) {
         std::cout << "TODO: Handle scrolling with dragging queue entry" << std::endl;
       }
@@ -600,7 +575,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
       queue_cover.setPosition({
         10.f,
         player.dragging_queue == id ?
-          get_mouse_pos(window).y - queue_entry_background.getGlobalBounds().size.y / 2:
+          get_mouse_pos(render_window).y - queue_entry_background.getGlobalBounds().size.y / 2:
           get_queue_entry_position(idx)
       });
 
@@ -658,7 +633,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
       // Hover checks
 
-      auto mouse_pos = get_mouse_pos(window);
+      auto mouse_pos = get_mouse_pos(render_window);
 
       if (player.dragging_queue == -1) { // Only show hover effects when not dragging an item
         if (queue_entry_background.getGlobalBounds().contains(mouse_pos)) {
@@ -677,14 +652,14 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
             queue_entry_duration.getGlobalBounds().contains(mouse_pos)
           ) {
 
-          window.setMouseCursor(hand_cursor);
+          render_window.setMouseCursor(hand_cursor);
 
           player.reset_cursor = false;
         }
       }
 
       if (player.dragging_queue != -1) {
-        window.setMouseCursor(hand_cursor);
+        render_window.setMouseCursor(hand_cursor);
 
         player.reset_cursor = false;
       }
@@ -767,10 +742,10 @@ void display_player(MenuData::PlayerData& player, sf::RenderWindow& window) {
 
   window.draw(*player_data.playlist_data);
 
-  window.display();
+  draw_window(render_window, window);
 }
 
-void switch_to_player(MenuData& menu_data, std::string playlist) {
+void switch_to_player(sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data, std::string playlist) {
   new_random();
 
   menu_data.data = MenuData::PlayerData();
@@ -785,7 +760,7 @@ void switch_to_player(MenuData& menu_data, std::string playlist) {
   pd.song_id = get_start_song(pd.queue);
   pd.is_valid = true;
 
-  pd.data = init_player(window, construct_song_path(pd.song_id), pd.song_id, playlist);
+  pd.data = init_player(window, render_window, menu_data, construct_song_path(pd.song_id), pd.song_id, playlist);
 }
 
 void done_playing(std::vector<int>& playlist, std::vector<int>& past) {

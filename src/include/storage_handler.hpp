@@ -3,6 +3,7 @@
 
 extern const std::string base_path;
 extern const std::string base_path_misc;
+extern const std::string base_path_misc_rasters;
 extern const std::string base_path_external;
 extern const std::string base_path_external_prog;
 extern const std::string base_music_path;

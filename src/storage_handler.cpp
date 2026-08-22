@@ -9,6 +9,7 @@
 
 extern const std::string base_path = "./";
 extern const std::string base_path_misc = base_path + "misc/";
+extern const std::string base_path_misc_rasters = base_path_misc + "rasters/";
 extern const std::string base_path_external = base_path + "external/";
 extern const std::string base_path_external_prog = base_path_external + "prog/";
 extern const std::string base_music_path = ".music_data/";
@@ -21,6 +22,7 @@ bool ensure_storage() {
     if (!(must_exist(base_path) && must_exist(base_path_misc)))
       return false;
 
+    mkdir(base_path_misc_rasters);
     mkdir(base_music_path);
     mkdir(base_music_path_data);
     mkdir(base_music_path_playlists);
@@ -156,7 +158,7 @@ std::vector<int> get_playlist(const std::string& name) {
 }
 
 std::vector<int> search_all_songs(const std::u32string& query) {
-  std::vector<int> results;
+  std::vector<std::pair<float, int>> scored_results;
 
   struct stat s;
   for (const auto& entry : std::filesystem::directory_iterator(base_music_path_data)) {
@@ -172,21 +174,35 @@ std::vector<int> search_all_songs(const std::u32string& query) {
         id = std::stoi(std::string(reinterpret_cast<const char*>(u8.c_str())));
       } catch (const std::invalid_argument& e) {
         std::cerr << e.what() << std::endl;
+        continue;
       } catch (const std::out_of_range& e) {
         std::cerr << e.what() << std::endl;
+        continue;
       }
 
       if (id >= 0) {
-        if (matching(query, get_song_title(id), match_diff)) {
-          results.push_back(id);
-          continue; // Don't bother matching the artist string
+        float title_score = matching(query, get_song_title(id), match_diff);
+
+        if (title_score == 1.f) { // Check if the title matches first since the user is more likely to search by title
+          scored_results.emplace_back(title_score, id);
+          continue; // Skip artist check
         }
 
-        if (matching(query, get_song_artist(id), match_diff)) {
-          results.push_back(id);
-        }
+        float artist_score = matching(query, get_song_artist(id), match_diff);
+
+        float best_score = std::max(title_score, artist_score);
+        if (best_score > 0.f)
+          scored_results.emplace_back(best_score, id);
       }
     }
+  }
+
+  std::sort(scored_results.begin(), scored_results.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+  std::vector<int> results;
+  results.reserve(scored_results.size());
+  for (const auto& [_, id] : scored_results) {
+    results.push_back(id);
   }
 
   return results;

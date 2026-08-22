@@ -4,7 +4,7 @@
 #include <fstream>
 #include <algorithm>
 #include <thread>
-#include "../external/lib/RoundedRectangleShape.hpp"
+
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/player_menu.hpp"
@@ -14,14 +14,17 @@
 #include "include/song_containers.hpp"
 #include "include/storage_handler.hpp"
 
-std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWindow& window) {
+#include "../external/lib/RoundedRectangleShape.hpp"
+
+std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data) {
   reset_globals();
 
-  auto download_tex = load_texture("download.png");
+  auto download_tex = load_texture("download");
 
   float search_size_x = 600.f;
-  auto search = std::make_shared<InputComponent>(InputComponent::Args::InputField{
-    .render_window = window,
+  auto search = std::make_shared<InputComponent>(menu_data, InputComponent::Args::InputField{
+    .window = window,
+    .render_window = render_window,
     .id = "playlist_search_input_c",
     .size = sf::Vector2f{search_size_x, 40.f},
     .pos = sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f},
@@ -40,18 +43,20 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderWin
   data->search = search;
   data->playlists = playlists;
   data->drawables_cache = drawables_cache;
+  data->search_res_area = nullptr;
   return data;
 }
 
-bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderWindow& window) {
+bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data) {
   global_z_index = 0;
 
   auto& data = *playlist_sel.data;
 
   window.clear(main_color);
+  no_invert_mask.clear(sf::Color::Black); // black means apply shader
 
   // Drag and drop area  TODO: Make this scrollable
-  sf::Vector2f playlist_drop_area_gap(60.f, 180.f);
+  sf::Vector2f playlist_drop_area_gap(60.f, 280.f);
   sf::RoundedRectangleShape playlist_drop_area_background(
     sf::Vector2f(
       window_size.x - playlist_drop_area_gap.x * 2,
@@ -65,6 +70,20 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   window.draw(playlist_drop_area_background);
 
   auto playlist_drop_area_bounds = playlist_drop_area_background.getGlobalBounds();
+
+  if (dragging_search_result != -1) {
+    sf::RoundedRectangleShape cancel_drop_area({
+      playlist_drop_area_bounds.size.x,
+      playlist_drop_area_bounds.position.y - data.search->background_bounds().position.y - data.search->background_bounds().size.y - 20.f,
+    }, 8, main_n);
+    cancel_drop_area.setPosition({
+      playlist_drop_area_bounds.position.x,
+      data.search->background_bounds().position.y + data.search->background_bounds().size.y + 10.f
+    });
+    cancel_drop_area.setFillColor(cancel_area_color);
+
+    window.draw(cancel_drop_area);
+  }
 
   // Favourites
   // TODO: Implement
@@ -80,20 +99,26 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   for (size_t i = 0; i < data.playlists.size(); i++) {
     sf::Vector2f cover_pos = {
       total_playlist_sel_size * (i % max_playlists_per_line) + padding_to_center + (cover_offset / 2),
-      (selector_cover_size + selector_gap) * ((int)(i / max_playlists_per_line) + 1) + (cover_offset / 2)
+      playlist_drop_area_gap.y + selector_gap + (selector_cover_size + selector_gap) * ((int)(i / max_playlists_per_line)) + (cover_offset / 2)
     };
 
-    auto cover = std::make_shared<sf::RoundedRectangleShape>(sf::Vector2f(selector_cover_size - cover_offset, selector_cover_size - cover_offset), 8, main_n);
+    const int cover_round = 8;
+    auto cover = std::make_shared<sf::RoundedRectangleShape>(sf::Vector2f(selector_cover_size - cover_offset, selector_cover_size - cover_offset), cover_round, main_n);
 
     cover->setPosition(cover_pos);
 
     if (data.drawables_cache.contains(i)) { // Only draw if the cache has it
-      auto mouse_pos = get_mouse_pos(window);
+      auto mouse_pos = get_mouse_pos(render_window);
 
       auto cover_dt = data.drawables_cache.get(i, "cover");
       if (cover_dt.drawformable->getGlobalBounds().contains(mouse_pos)) {
         // TODO: Hover effect
       }
+
+      sf::RoundedRectangleShape cover_art_mask(cover_dt.drawformable->getGlobalBounds().size, cover_round, main_n);
+      cover_art_mask.setPosition(cover_dt.drawformable->getGlobalBounds().position);
+      cover_art_mask.setFillColor(sf::Color::White); // white means don't apply shader
+      no_invert_mask.draw(cover_art_mask);
 
       data.drawables_cache.draw(i, window);
 
@@ -111,8 +136,9 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         if (data.playlist_names_cache.size() <= i)
           data.playlist_names_cache.resize(i + 1);
 
-        data.playlist_names_cache[i] = std::make_unique<InputComponent>(InputComponent::Args::TextReplica{
-          .render_window = window,
+        data.playlist_names_cache[i] = std::make_unique<InputComponent>(menu_data, InputComponent::Args::TextReplica{
+          .window = window,
+          .render_window = render_window,
           .id = "playlist_name_" + std::to_string(i),
           .text_reference = playlist_name_text_reference,
           .font_size = large_font_size,
@@ -123,15 +149,15 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       auto& playlist_name = data.playlist_names_cache[i];
       playlist_name->draw();
 
-      new_click_event(click_events, "playlist_play_" + std::to_string(i), [i](MenuData& menu_data) {
-        switch_to_player(menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
+      new_click_event(click_events, "playlist_play_" + std::to_string(i), [&render_window, &window, i](MenuData& menu_data) {
+        switch_to_player(window, render_window, menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
       }, cover->getGlobalBounds(), sf::Mouse::Button::Left);
 
       if (!pause_main_input_handling) {
         // Hover checks
 
         if (cover->getGlobalBounds().contains(mouse_pos)) {
-          window.setMouseCursor(hand_cursor);
+          render_window.setMouseCursor(hand_cursor);
 
           playlist_sel.reset_cursor = false;
         }
@@ -168,7 +194,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     data.drawables_cache.add(i, "sel_background_shadow", DTPair{std::make_shared<DrawformableObject>(sel_background_shadow, sel_background_shadow), nullptr});
     data.drawables_cache.add(i, "sel_background", DTPair{std::make_shared<DrawformableObject>(sel_background, sel_background), nullptr});
     data.drawables_cache.add(i, "playlist_size", DTPair{std::make_shared<DrawformableObject>(playlist_size, playlist_size), nullptr});
-    data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture});
+    data.drawables_cache.add(i, "cover", DTPair{std::make_shared<DrawformableObject>(cover, cover), cover_texture}); // no-invert in the name causes the invert shader to be applied twice if dark mode is on and zero times if it is off
   }
 
 
@@ -177,11 +203,25 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
   if (playlist_sel.data->search->is_active() && playlist_sel.data->search->is_focused()) {
     search_was_active = true;
 
-    float search_results_background_h = playlist_search_entry_unit * search_results.size();
+    float max_search_results_background_h = window_size.y - 160.f;
+    float search_results_background_h = std::min(playlist_search_entry_unit * search_results.size(), max_search_results_background_h);
+
+    sf::RoundedRectangleShape search_results_background({
+      data.search->background_bounds().size.x,
+      search_results_background_h + 10.f
+    }, 8, main_n);
+    search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y});
+    search_results_background.setFillColor(light_background_color);
+    search_results_background.setCornerRadii(std::array<float, 4>{
+      0.f,
+      0.f,
+      search_results_background.getCornersRadius(2),
+      search_results_background.getCornersRadius(3)
+    });
+
     // If there is a result being dragged remove the background
-    if (dragging_search_result != -1) {
+    if (dragging_search_result != -1)
       search_results_background_h = 0;
-    }
 
     // Only make the bottom corners not rounded if there are any search results
     if (search_results_background_h != 0) {
@@ -205,32 +245,23 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       search_res_release_events.clear();
     }
 
-    sf::RoundedRectangleShape search_results_background({
-      data.search->background_bounds().size.x,
-      search_results_background_h + 10.f
-    }, 8, main_n);
-    search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y});
-    search_results_background.setFillColor(light_background_color);
-    search_results_background.setCornerRadii(std::array<float, 4>{
-      0.f,
-      0.f,
-      search_results_background.getCornersRadius(2),
-      search_results_background.getCornersRadius(3)
-    });
+    if (!data.search_res_area) {
+      // On click on this area refocus search if it was just focused
+      data.search_res_area = std::make_unique<AreaComponent>(AreaComponent::Args::Area{
+        .id = "search_res_area",
+        .bounds = search_results_background.getGlobalBounds(),
+        .function = [](MenuData& menu_data){
+          if (search_was_active)
+            // {-1, -1} to prevent any extra focus actions (selecting, changing cursor position, ...)
+            std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->focus({-1, -1});
+        },
+        .rank = ON_TOP
+      });
+    } else if (data.search_res_area->get_bounds() != search_results_background.getGlobalBounds()) {
+      data.search_res_area = nullptr;
+    }
 
-    // On click on this area refocus search if it was just focused
-    AreaComponent search_res_area(AreaComponent::Args::Area{
-      .id = "search_res_area",
-      .bounds = search_results_background.getGlobalBounds(),
-      .function = [](MenuData& menu_data){
-        if (search_was_active)
-          std::get<MenuData::PlaylistSelector>(menu_data.data).data->search->focus({-1, -1}); // {-1, -1} since the position won't be changed anyway
-      },
-      .permanent = false,
-      .rank = ON_TOP
-    });
-
-    new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), playlist_sel_scroll, can_search_string_scroll);
+    new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), &playlist_sel_scroll, &can_search_string_scroll);
 
     if (search_results_background_h != 0)
       window.draw(search_results_background);
@@ -240,9 +271,12 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     int idx = 0;
     float last_y_pos = 0.f;
 
-    float total_content_h = (playlist_search_entry_height + 10.f) * search_results.size() + 20.f;
-    float max_scroll = std::max(playlist_search_scroll_lower_bound / 2, total_content_h - search_results_background_h - playlist_search_entry_unit / 2 - 10.f);
-    playlist_sel_scroll = std::clamp(playlist_sel_scroll, playlist_search_scroll_lower_bound, max_scroll);
+    float total_content_h = playlist_search_entry_height * (search_results.size() + 1) - max_search_results_background_h;
+    if (total_content_h < 0) {
+      total_content_h = playlist_search_scroll_lower_bound;
+    }
+
+    playlist_sel_scroll = std::clamp(playlist_sel_scroll, playlist_search_scroll_lower_bound, total_content_h);
 
     float view_left = search_results_background.getPosition().x / window_size.x;
     float view_top = (search_results_background.getPosition().y) / window_size.y;
@@ -276,12 +310,14 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       // Place the song container on the mouse if it is dragged otherwise normal
       sf::Vector2f search_result_pos;
       if (search_res_id == dragging_search_result) {
-        window.setView(window.getDefaultView());
-        search_result_pos = static_cast<sf::Vector2f>(sf::Mouse::getPosition(window));
+        window.setView(default_view);
+        no_invert_mask.setView(default_view);
+        search_result_pos = static_cast<sf::Vector2f>(sf::Mouse::getPosition(render_window));
         search_result_pos.x -= search_result_size.x / 2;
         search_result_pos.y -= search_result_size.y / 2;
       } else {
         window.setView(search_results_view);
+        no_invert_mask.setView(search_results_view);
         search_result_pos = sf::Vector2f(search_results_background.getPosition().x + 10.f, last_y_pos);
       }
 
@@ -291,6 +327,11 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
         search_result_size,
         search_res_id == dragging_search_result
       );
+
+      sf::RoundedRectangleShape cover_art_mask(search_result->cover.getGlobalBounds().size, search_result->cover.getCornersRadius(0), main_n);
+      cover_art_mask.setPosition(search_result->cover.getGlobalBounds().position);
+      cover_art_mask.setFillColor(sf::Color::White); // white means don't apply shader
+      no_invert_mask.draw(cover_art_mask);
 
       draw_small_song_container(search_result);
 
@@ -320,14 +361,14 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           search_res_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
         );
         new_release_event(search_res_release_events, "search_res_bounds_" + std::to_string(search_res_id),
-          [search_res_id, &window, playlist_drop_area_bounds](MenuData& menu_data) {
+          [search_res_id, &window, &render_window, playlist_drop_area_bounds](MenuData& menu_data) {
             auto data = std::get<MenuData::PlaylistSelectorData>(menu_data.data).data;
 
             if (dragging_search_result == search_res_id) {
               dragging_search_result = -1;
 
               // Detect where it was dropped
-              auto dropped_pos = get_mouse_pos(window);
+              auto dropped_pos = get_mouse_pos(render_window);
 
               for (size_t i = 0; i < data->playlists.size(); i++) {
                 auto background = data->drawables_cache.get(i, "sel_background");
@@ -335,14 +376,14 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
                 if (background_bounds.contains(dropped_pos)) {
                   add_to_playlist(data->playlists[i], search_res_id);
-                  switch_to_playlist_selector(menu_data, window);
+                  switch_to_playlist_selector(menu_data, window, render_window);
                   return;
                 }
               }
 
               if (playlist_drop_area_bounds.contains(dropped_pos)) {
                 create_new_playlist(search_res_id);
-                switch_to_playlist_selector(menu_data, window);
+                switch_to_playlist_selector(menu_data, window, render_window);
                 return;
               }
             }
@@ -359,10 +400,12 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
     search_results = search_results_before;
     window.setView(default_view);
+    no_invert_mask.setView(default_view);
   }
   else {
     search_was_active = false;
     can_search_string_scroll = false;
+    data.search_res_area = nullptr;
     data.search->draw_input_shadow();
     data.search->background_reset_corner_radii();
   }
@@ -414,18 +457,39 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     window.draw(pbar_progress_done);
   }
 
-  window.display();
+  if (focus_events.size() > 0) {
+    size_t i = 0;
+    bool g = false;
+    for (const auto& e : focus_events) {
+      if (e.id == "playlist_search_input_c") {
+        g = true;
+        break;
+      }
+      i++;
+    }
+
+    if (g) {
+      std::cout << focus_events[i].bounds.size.x << ", " << focus_events[i].bounds.size.y << "; " << focus_events[i].bounds.position.x << ", " << focus_events[i].bounds.position.y << "\n";
+      // debug_draw_bounds(window, focus_events[i].bounds);
+    } else {
+      std::cout << "no event " << "playlist_search_input_c" << "\n";
+    }
+  } else {
+    std::cout << "no events\n";
+  }
+
+  draw_window(render_window, window);
 
   return true;
 }
 
-void switch_to_playlist_selector(MenuData& menu_data, sf::RenderWindow& window) {
+void switch_to_playlist_selector(MenuData& menu_data, sf::RenderTexture& window, sf::RenderWindow& render_window) {
   menu_data.data = MenuData::PlaylistSelectorData();
   menu_data.type = MenuData::PlaylistSelector;
 
   input_max_char = playlist_search_max_char;
 
-  std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window);
+  std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window, render_window, menu_data);
   std::get<MenuData::PlaylistSelector>(menu_data.data).is_valid = true;
 
   if (!std::get<MenuData::PlaylistSelectorData>(menu_data.data).is_valid || !std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {

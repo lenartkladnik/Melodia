@@ -9,15 +9,21 @@
 #include <unordered_map>
 #include <algorithm>
 #include <random>
-#include "../../external/lib/RoundedRectangleShape.hpp"
+
 #include "utils.hpp"
 #include "drawformable.hpp"
 
-class InputComponent; // Forward declare
+#include "../../external/lib/RoundedRectangleShape.hpp"
+
+// Forward declarations
+class InputComponent;
+class AreaComponent;
 
 // Constants
 
-extern const int ON_TOP;
+extern bool dark_mode;
+
+extern const int ON_TOP; // Maximum z-index that is assumed to be on the top of everything else
 
 extern const float padding_top;
 extern const float offset;
@@ -54,12 +60,16 @@ extern const float large_font_size;
 
 extern const sf::Vector2u window_base_size;
 extern const sf::ContextSettings window_settings;
-extern sf::RenderWindow window;
+extern sf::RenderWindow render_window;
+extern sf::RenderTexture window;
+extern sf::RenderTexture no_invert_mask;
 extern sf::Vector2f window_size;
 extern sf::View default_view;
 extern bool is_fullscreen;
 
 extern int global_z_index;
+
+extern const std::unordered_map<std::string, sf::Vector2u> icon_sizes;
 
 extern const sf::Color main_color;
 extern const sf::Color dark_main_color;
@@ -81,8 +91,9 @@ extern const sf::Color white_color;
 extern const sf::Color title_color;
 extern const sf::Color artist_color;
 extern const sf::Color selection_color;
+extern const sf::Color cancel_area_color;
 
-extern const sf::Color hover_sub;
+extern const int hover_sub;
 
 extern const sf::Cursor default_cursor;
 extern const sf::Cursor text_cursor;
@@ -108,6 +119,8 @@ extern bool search_was_active;
 
 extern std::random_device rd;
 extern std::mt19937 rand_generator;
+
+extern sf::Shader invert_shader;
 
 class MusicPlayer {
   public:
@@ -216,8 +229,6 @@ struct StaticPlayerData {
   std::optional<sf::Sprite> favorite;
   std::optional<sf::Sprite> manage_playlist;
   std::optional<sf::Sprite> playlist_selector;
-  std::optional<sf::Sprite> trash;
-  std::optional<sf::Sprite> edit;
   std::optional<sf::Sprite> vol_icon;
   std::optional<sf::Sprite> live;
   std::optional<sf::Text> artist;
@@ -238,12 +249,10 @@ struct StaticPlayerData {
   std::shared_ptr<sf::Texture> previous_tex;
   sf::RoundedRectangleShape control_corner;
   sf::RoundedRectangleShape control_corner_shadow;
-  std::shared_ptr<sf::Texture> trash_tex;
   std::string playlist;
   std::shared_ptr<sf::Texture> manage_playlist_tex;
   std::shared_ptr<sf::Texture> favorite_empty_tex;
   std::shared_ptr<sf::Texture> favorite_full_tex;
-  std::shared_ptr<sf::Texture> edit_tex;
   sf::RoundedRectangleShape queue_background;
   sf::RoundedRectangleShape queue_background_shadow;
   bool search_placeholder_active;
@@ -275,6 +284,7 @@ struct StaticPlaylistSelectorData {
   std::vector<std::string> playlists;
   DTCache drawables_cache;
   std::vector<std::unique_ptr<InputComponent>> playlist_names_cache;
+  std::unique_ptr<AreaComponent> search_res_area;
 
   StaticPlaylistSelectorData() = default;
   ~StaticPlaylistSelectorData() = default;

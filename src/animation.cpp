@@ -3,6 +3,7 @@
 #include <time.h>
 #include <vector>
 #include <algorithm>
+
 #include "include/data.hpp"
 
 struct AnimateThread {

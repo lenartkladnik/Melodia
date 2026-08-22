@@ -2,6 +2,7 @@
 #define ANIMATION_HPP
 
 #include <SFML/Graphics.hpp>
+
 #include "data.hpp"
 
 enum class AnimationStage {

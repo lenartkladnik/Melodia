@@ -2,6 +2,7 @@ import subprocess
 import os.path
 import shutil
 import pathlib
+import glob
 
 build = ARGUMENTS.get("build", "release")
 target = ARGUMENTS.get("target", "all")
@@ -31,6 +32,8 @@ sources = [
     "src/events.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]
+sources += glob.glob("external/lib/SFC/*.cpp")
+sources += glob.glob("external/lib/SFC/nanosvg++/*.cpp")
 
 base = Environment(
     CPPPATH=["include", "external/lib"],

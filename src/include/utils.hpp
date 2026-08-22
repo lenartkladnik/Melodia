@@ -4,11 +4,15 @@
 #include <SFML/Graphics.hpp>
 #include <string>
 
-void debug_draw_bounds(sf::RenderWindow& window, sf::FloatRect bounds);
+void debug_draw_bounds(sf::RenderTexture& window, sf::FloatRect bounds);
 
 void set_window(sf::State state);
+void draw_window(sf::RenderWindow& render_window, sf::RenderTexture& window);
 void new_random();
 std::string exec(const char* cmd);
+bool resize_image(std::string path, std::string output, sf::Vector2u target_size);
+bool rasterize_texture(std::string name);
+void rasterize_textures();
 std::shared_ptr<sf::Texture> load_texture(std::string path);
 bool is_string_valid_name(const std::string& s);
 void mkdir(std::string path);
@@ -22,7 +26,7 @@ size_t find_character_at_pos_x(const std::u32string& string, const sf::Text& tex
 inline sf::Vector2f get_mouse_pos(sf::RenderWindow& window) { return window.mapPixelToCoords(sf::Mouse::getPosition(window)); }
 std::string u32_to_utf8(const std::u32string& u32);
 std::u32string utf8_to_u32(const std::string& utf8);
-bool matching(std::u32string s1, std::u32string s2, size_t threshold);
+float matching(std::u32string s1, std::u32string s2, size_t threshold);
 std::string seconds_to_human_readable(float seconds);
 float getFontOffsetPixels(float target_size);
 void setFontSize(sf::Text& text, float target_size, unsigned int raster_mul = 2);
@@ -30,6 +34,7 @@ void reset_globals();
 sf::Color sub_colors(sf::Color a, sf::Color b);
 sf::Color add_colors(sf::Color a, sf::Color b);
 sf::Color add_int_to_color(sf::Color a, int b);
+sf::Color adjust_if_dark_mode(sf::Color a);
 
 template<typename TShape>
 void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {

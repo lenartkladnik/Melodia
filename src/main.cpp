@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <math.h>
 #include <clocale>
+
 #include "include/components.hpp"
 #include "include/player_menu.hpp"
 #include "include/playlist_selector_menu.hpp"
@@ -16,8 +17,6 @@
 using namespace sf;
 
 int main() {
-  set_window(sf::State::Windowed);
-  std::setlocale(LC_ALL, "en_US.UTF-8");
   if (!ensure_storage())
     return 1;
 
@@ -33,12 +32,69 @@ int main() {
   }
   default_font.setSmooth(true);
 
-  window.setIcon(icon.getSize(), icon.getPixelsPtr());
+
+  sf::RenderWindow window_popup_rasterizing(sf::VideoMode({300, 100}), "Melodia - Rasterizing textures", sf::Style::None);
+  sf::Texture icon_tex;
+  if (!icon_tex.loadFromImage(icon)) {
+    throw std::runtime_error("Failed to load icon from image.\n");
+  }
+  sf::Sprite icon_sprite(icon_tex);
+  icon_sprite.setPosition({
+    window_popup_rasterizing.getSize().x / 2 - icon_sprite.getGlobalBounds().size.x / 2,
+    window_popup_rasterizing.getSize().y - icon_sprite.getGlobalBounds().size.y - 2.f
+  });
+  sf::Text rasterizing_text(default_font, "Loading...");
+  rasterizing_text.setCharacterSize(24);
+  rasterizing_text.setFillColor(text_color);
+  rasterizing_text.setStyle(sf::Text::Bold);
+  rasterizing_text.setPosition({
+    window_popup_rasterizing.getSize().x / 2 - rasterizing_text.getGlobalBounds().size.x / 2,
+    window_popup_rasterizing.getSize().y / 2 - rasterizing_text.getGlobalBounds().size.y / 2 - 10.f
+  });
+  window_popup_rasterizing.clear(sf::Color(background_color));
+  window_popup_rasterizing.draw(rasterizing_text);
+  window_popup_rasterizing.draw(icon_sprite);
+  window_popup_rasterizing.display();
+
+  rasterize_textures(); // svg (./misc) -> png (./misc/rasters)
+
+  window_popup_rasterizing.close();
+
+  if (!window.resize(window_base_size)) {
+    throw std::runtime_error("Failed to resize window render texture.");
+  }
+
+  if (!no_invert_mask.resize(window_base_size)) {
+    throw std::runtime_error("Failed to resize no_invert_mask render texture.");
+  }
+
+  set_window(sf::State::Windowed);
+  std::setlocale(LC_ALL, "en_US.UTF-8");
+
+  if (!invert_shader.loadFromMemory(R"(
+    uniform sampler2D texture;
+    uniform sampler2D mask;
+
+    void main() {
+        vec4 pixel = texture2D(texture, gl_TexCoord[0].xy);
+        float m = texture2D(mask, gl_TexCoord[0].xy).r;
+
+        float gray = dot(pixel.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 inverted = vec3(1.0 - gray);
+
+        vec3 result = mix(inverted, pixel.rgb, m);
+        gl_FragColor = vec4(result, pixel.a);
+    }
+  )", sf::Shader::Type::Fragment)) {
+    throw std::runtime_error("Failed to load 'invert' fragment shader from memory.");
+  }
+
+  render_window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
   MenuData menu_data;
 
-  switch_to_playlist_selector(menu_data, window); // Start as the playlist selector
-  // switch_to_player(menu_data, "tmp");
+  switch_to_playlist_selector(menu_data, window, render_window); // Start as the playlist selector
+  // switch_to_player(window, render_window, menu_data, "tmp");
 
   getFontOffsetPixels(small_font_size);
   getFontOffsetPixels(medium_font_size);
@@ -93,10 +149,10 @@ int main() {
     player->data->queue_background_shadow.setPosition({-10.f + diff, player->data->queue_background_shadow.getPosition().y});
   };
 
-  while (window.isOpen()) {
-    while (const std::optional event = window.pollEvent()) {
+  while (render_window.isOpen()) {
+    while (const std::optional event = render_window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
-        window.close();
+        render_window.close();
       } else if (const auto* resized = event->getIf<sf::Event::Resized>()) {
         // On resize:
         // - set new view
@@ -110,7 +166,16 @@ int main() {
         };
         default_view.setSize(window_size);
         default_view.setCenter({window_size.x / 2.f, window_size.y / 2.f});
+        render_window.setView(default_view);
         window.setView(default_view);
+        no_invert_mask.setView(default_view);
+        if (!window.resize(resized->size)) {
+          throw std::runtime_error("Failed to resize window render texture.");
+        }
+
+        if (!no_invert_mask.resize(resized->size)) {
+          throw std::runtime_error("Failed to resize no_invert_mask render texture.");
+        }
 
         switch (menu_data.type) {
           case (MenuData::Player): {
@@ -135,30 +200,68 @@ int main() {
             playlist_sel.data->search->unfocus();
 
             // After the resize all items must be re-rendered
-            switch_to_playlist_selector(menu_data, window);
+            switch_to_playlist_selector(menu_data, window, render_window);
 
             break;
           }
         }
       } else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
-        if (keyPressed->code == sf::Keyboard::Key::F11) {
-          if (is_fullscreen)
-            set_window(sf::State::Windowed);
-          else
-            set_window(sf::State::Fullscreen);
-        } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::C) {
-          ctrl_c_signal.emit();
-        } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::V) {
-          ctrl_v_signal.emit();
-        } else if (keyPressed->control && keyPressed->code == sf::Keyboard::Key::A) {
-          ctrl_a_signal.emit();
+        switch (keyPressed->code) {
+          case sf::Keyboard::Key::F11:
+            if (is_fullscreen)
+              set_window(sf::State::Windowed);
+            else
+              set_window(sf::State::Fullscreen);
+            break;
+
+          case sf::Keyboard::Key::Space:
+            play_toggle_signal.emit();
+            break;
+
+          case sf::Keyboard::Key::Enter:
+            confirm_signal.emit();
+            break;
+
+          case sf::Keyboard::Key::Left:
+            left_signal.emit();
+            break;
+
+          case sf::Keyboard::Key::Right:
+            right_signal.emit();
+            break;
+
+          case sf::Keyboard::Key::Escape:
+            escape_signal.emit();
+            break;
+
+          default:
+            break;
+        }
+
+        if (keyPressed->control) {
+          switch (keyPressed->code) {
+            case sf::Keyboard::Key::C:
+              copy_signal.emit();
+              break;
+
+            case sf::Keyboard::Key::V:
+              paste_signal.emit();
+              break;
+
+            case sf::Keyboard::Key::A:
+              select_all_signal.emit();
+              break;
+
+            default:
+              break;
+          }
         }
       }
 
       if (!pause_main_input_handling) {
         on<sf::Event::MouseWheelScrolled>(*event, scroll_events,
-          [&](const auto*, auto& item) { return item.can_scroll; },
-          [&](const auto* e, auto* item) { item->scroll_offset -= e->delta * scroll_speed; },
+          [&](const auto*, auto& item) { return *item.can_scroll; },
+          [&](const auto* e, auto* item) { *item->scroll_offset -= e->delta * scroll_speed; },
           [](const auto*, auto*){}
         );
 
@@ -184,7 +287,7 @@ int main() {
         on<sf::Event::MouseButtonPressed>(*event, focus_events,
           [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
           [&](const auto* e, auto* item) {
-            auto pos = window.mapPixelToCoords(e->position, item->view);
+            auto pos = render_window.mapPixelToCoords(e->position, item->view);
             item->function(menu_data, pos);
           },
           [&](const auto*, auto* item){
@@ -267,7 +370,7 @@ int main() {
     // Hover effects TODO: Not working
     if (!pause_main_input_handling) {
       for (const auto& item : hover_events) {
-        if (item.bounds.contains((sf::Vector2f)sf::Mouse::getPosition(window))) {
+        if (item.bounds.contains((sf::Vector2f)sf::Mouse::getPosition(render_window))) {
           if (!item.component->is_hidden()) {
             std::cout << "Hover on: " << item.id << "\n";
             item.component->on_hover();
@@ -296,7 +399,7 @@ int main() {
               player.music->play();
           }
 
-          auto coords_pos = get_mouse_pos(window);
+          auto coords_pos = get_mouse_pos(render_window);
           float progress_pos = (coords_pos.x - player.data->progress.getPosition().x) / player.data->progress.getGlobalBounds().size.x;
           progress_pos = std::clamp(progress_pos, 0.f, 1.f);
           player.music->seek(progress_pos);
@@ -311,7 +414,7 @@ int main() {
             player.volume_slider_active = false;
           }
 
-          auto coords_pos = get_mouse_pos(window);
+          auto coords_pos = get_mouse_pos(render_window);
           float vol_pos = (coords_pos.x - player.data->vol_slider.getPosition().x) / player.data->vol_slider.getGlobalBounds().size.x;
           vol_pos = std::clamp(vol_pos, 0.f, 1.f);
           player.music->set_volume(vol_pos);
@@ -335,7 +438,7 @@ int main() {
           player.playing_song_id = player.song_id;
 
           player.music->play();
-          player.data = init_player(window, player.song_path, player.song_id, player.playlist);
+          player.data = init_player(window, render_window, menu_data, player.song_path, player.song_id, player.playlist);
           player.data->cover.setTexture(player.data->cover_texture.get()); // Ensure the cover art texture is set
 
           // Reset state
@@ -343,23 +446,20 @@ int main() {
           if (player.live_mode) player.data->live->setTexture(*player.data->live_full_tex);
         }
 
-        auto pos = get_mouse_pos(window);
+        auto pos = get_mouse_pos(render_window);
 
         // Hover effects
 
         // TODO: Figure out how to only change hover state when the obj has hidden false
         if (player.data->search->background_bounds().contains(pos)) {
-          window.setMouseCursor(text_cursor);
+          render_window.setMouseCursor(text_cursor);
           player.reset_cursor = false;
         }
         else if (
             player.data->main_control->getGlobalBounds().contains(pos) ||
             player.data->next_control->getGlobalBounds().contains(pos) ||
             player.data->previous_control->getGlobalBounds().contains(pos) ||
-            player.data->trash->getGlobalBounds().contains(pos) ||
-            player.data->manage_playlist->getGlobalBounds().contains(pos) ||
             player.data->favorite->getGlobalBounds().contains(pos) ||
-            player.data->edit->getGlobalBounds().contains(pos) ||
             player.data->progress.getGlobalBounds().contains(pos) ||
             player.data->queue_toggle->getGlobalBounds().contains(pos) ||
             player.data->vol_icon->getGlobalBounds().contains(pos) ||
@@ -370,16 +470,16 @@ int main() {
             !player.reset_cursor
           ) {
 
-          window.setMouseCursor(hand_cursor);
+          render_window.setMouseCursor(hand_cursor);
         }
         else if (player.reset_cursor) {
-          window.setMouseCursor(default_cursor);
+          render_window.setMouseCursor(default_cursor);
         }
         else {
           player.reset_cursor = true;
         }
 
-        if (player.data) display_player(player, window);
+        if (player.data) display_player(player, window, render_window);
         else player.playing_song_id = -1; // Something went wrong re-init
 
       break;
@@ -388,13 +488,13 @@ int main() {
       case (MenuData::PlaylistSelector): {
         auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
 
-        auto pos = get_mouse_pos(window);
+        auto pos = get_mouse_pos(render_window);
 
         // Hover effects
 
         // TODO: Figure out how to only change hover state when the obj has hidden false
         if (playlist_sel.data->search->background_bounds().contains(pos) && !playlist_sel.data->search->action_button_bounds().contains(pos)) {
-          window.setMouseCursor(text_cursor);
+          render_window.setMouseCursor(text_cursor);
           playlist_sel.reset_cursor = false;
         }
         else if (
@@ -402,17 +502,17 @@ int main() {
             !playlist_sel.reset_cursor
           ) {
 
-          window.setMouseCursor(hand_cursor);
+          render_window.setMouseCursor(hand_cursor);
 
           playlist_sel.reset_cursor = false;
         }
         else if (playlist_sel.reset_cursor) {
-          window.setMouseCursor(default_cursor);
+          render_window.setMouseCursor(default_cursor);
         }
 
 
         if (playlist_sel.data) {
-          if (!display_playlist_selector(playlist_sel, window)) break; // false returned when switched to new menu
+          if (!display_playlist_selector(playlist_sel, window, render_window, menu_data)) break; // false returned when switched to new menu
         }
 
       break;

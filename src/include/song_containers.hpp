@@ -2,6 +2,7 @@
 #define SONG_CONTAINERS_HPP
 
 #include "data.hpp"
+
 #include "../../external/lib/RoundedRectangleShape.hpp"
 
 struct SmallSongContainerComponent {

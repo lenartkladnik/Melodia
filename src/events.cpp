@@ -48,7 +48,7 @@ void new_focus_event(std::vector<FocusEvent>& container, std::string id, std::fu
   container.push_back(FocusEvent{{std::move(id), bounds, view, component, rank}, function, else_function, mouse_button});
 }
 
-void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float& scroll_offset, bool& can_scroll, UIComponent* component, int rank) {
+void new_scroll_event(std::vector<ScrollEvent>& container, std::string id, sf::FloatRect bounds, float* scroll_offset, bool* can_scroll, UIComponent* component, int rank) {
   _handle_duplicates(container, id);
   container.push_back(ScrollEvent{{std::move(id), bounds, default_view, component, rank}, scroll_offset, can_scroll});
 }

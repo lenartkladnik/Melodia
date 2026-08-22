@@ -1,9 +1,11 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/storage_handler.hpp"
+#include "include/utils.hpp"
 
 #ifndef _WIN32
   #define STB_IMAGE_IMPLEMENTATION
@@ -14,14 +16,9 @@
 // Disable warnings produced by external libs
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
 #include "../external/lib/httplib.h"
 #include "../external/lib/nlohmann/json.hpp"
-#include "../external/lib/stb/stb_image.h"
-#include "../external/lib/stb/stb_image_resize2.h"
-#include "../external/lib/stb/stb_image_write.h"
 
 #pragma GCC diagnostic pop // Enable all warnings
 
@@ -102,47 +99,9 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
   progress_bar_doing_string = "Resizing cover art";
   progress_bar_amount += 1.f; // Done downloading / started resizing the cover art image
 
-  int w, h, channels;
-  unsigned char* data = stbi_load(temp_file_path.c_str(), &w, &h, &channels, 0);
-
-  if (!data) {
-    throw std::runtime_error("Failed to decode image from " + temp_file_path + ": " + stbi_failure_reason());
+  if (!resize_image(temp_file_path, output, {(unsigned)target_w, (unsigned)target_h})) {
     return false;
   }
-
-  std::vector<unsigned char> resized(target_w * target_h * channels);
-
-  stbir_pixel_layout layout;
-  switch (channels) {
-    case 1: layout = STBIR_1CHANNEL; break;
-    case 2: layout = STBIR_2CHANNEL; break;
-    case 3: layout = STBIR_RGB; break;
-    case 4: layout = STBIR_RGBA; break;
-    default:
-      throw std::runtime_error("Unsupported channel count for cover art image.");
-      stbi_image_free(data);
-      return false;
-  }
-
-  stbir_resize(
-    data, w, h, 0,
-    resized.data(), target_w, target_h, 0,
-    layout,
-    STBIR_TYPE_UINT8,
-    STBIR_EDGE_CLAMP,
-    STBIR_FILTER_DEFAULT
-  );
-
-  progress_bar_doing_string = "Writing resized cover art";
-  progress_bar_amount += 1.f; // Done resizing the cover art image
-
-  if (!stbi_write_png(output.c_str(), target_w, target_h, channels, resized.data(), target_w * channels)) {
-    throw std::runtime_error("Failed to write cover art image.");
-    stbi_image_free(data);
-    return false;
-  }
-
-  stbi_image_free(data);
 
   std::cout << "Info: Resized cover art image\n";
   progress_bar_amount += 1.f; // Done writing cover art image
@@ -194,10 +153,10 @@ bool _download_cover_art(int new_id) {
   progress_bar_doing_string = "Downloading cover art";
 
   std::string main_base_url = "https://www.last.fm";
-  std::string image_base_url = "https://lastfm.freetls.fastly.net";
+  std::string image_base_url = "https://lastfm-img.freetls.fastly.net";
 
   std::string new_base = base_music_path_data + std::to_string(new_id);
-  std::string temp_file_path = ".cover_art.png.tmp";
+  std::string temp_file_path = new_base + ".cover_art.png.tmp";
 
   auto artist_string = get_song_artist(new_id);
   auto title_string = get_song_title(new_id);
@@ -222,13 +181,14 @@ bool _download_cover_art(int new_id) {
       if (line.find(image_base_url) != std::string::npos) {
         // Store first occurrence and exit
 
-        // Parse the url out of: '            src="https://lastfm.freetls.fastly.net/i/u/64s/<id>.jpg"'
+        // Parse the url out of: 'src="https://lastfm.freetls.fastly.net/i/u/64s/<id>.jpg"'
         size_t start = line.find("src=");
         size_t url_start = start + 5;
         cover_art_path = line.substr(url_start, line.size() - url_start - 1);
 
         // Change the size to be maximally large
-        std::string default_size = "64s";
+        size_t size_start = cover_art_path.find("i/u/") + 4;
+        std::string default_size = cover_art_path.substr(size_start, cover_art_path.find('/', size_start) - size_start);
         cover_art_path.replace(cover_art_path.find(default_size), default_size.size(), "1000s");
 
         // Remove the image base url, leaving only the path
@@ -260,9 +220,19 @@ bool _download_cover_art(int new_id) {
       return false;
     }
 
-    temp_file << img_dl_res->body;
+    std::string img_data = img_dl_res->body;
+    temp_file << img_data;
+
+    std::cout << "[download.cpp] Wrote " << img_data.size() << "B to " << temp_file_path << "\n";
 
     temp_file.close();
+  } else {
+    std::cout << "[download.cpp] Failed to get cover art data (url='" << image_base_url << cover_art_path << "')\n";
+    if (img_dl_res) {
+      std::cout << "    Status code: " << img_dl_res->status << "\n";
+    } else {
+      std::cout << "    Response is a null ptr\n";
+    }
   }
 
   progress_bar_amount += 1.f; // Done writing cover art image to temp file
@@ -273,6 +243,8 @@ bool _download_cover_art(int new_id) {
   progress_bar_doing_string = "Removing temporary file";
 
   std::remove(temp_file_path.c_str());
+
+  std::cout << "[download.cpp] Removed temporary file " << temp_file_path << "\n";
 
   return true;
 }
@@ -310,10 +282,10 @@ bool _download_song_from_query(const std::u32string& query) {
   // Set progress bar
   progress_bar_string = "Downloading...";
   progress_bar_amount = 0.f;
-  progress_bar_total = 12.f; // 3 in download_song_from_query
+  progress_bar_total = 10.f; // 3 in download_song_from_query
                              // |-> 3 in _download_cover_art
-                             //     |-> 3 in _resize_cover_art (normal)
-                             //     |-> 3 in _resize_cover_art (small)
+                             //     |-> 2 in _resize_cover_art (normal)
+                             //     |-> 2 in _resize_cover_art (small)
 
   progress_bar_doing_string = "Getting the max id";
 

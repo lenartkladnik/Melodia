@@ -3,10 +3,29 @@
 #include <unicode/uchar.h>
 #include <unicode/unistr.h>
 #include <unicode/utypes.h>
+
 #include "include/data.hpp"
 #include "include/components.hpp"
 #include "include/storage_handler.hpp"
 #include "include/signals.hpp"
+
+#ifndef _WIN32
+  #define STB_IMAGE_IMPLEMENTATION
+  #define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+
+// Disable warnings produced by external libs
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+
+#include "../external/lib/SFC/Svg.hpp"
+#include "../external/lib/stb/stb_image.h"
+#include "../external/lib/stb/stb_image_resize2.h"
+#include "../external/lib/stb/stb_image_write.h"
+
+#pragma GCC diagnostic pop // Enable all warnings
 
 #ifdef _WIN32
   #define POPEN _popen
@@ -18,7 +37,7 @@
 
 using icu::UnicodeString;
 
-void debug_draw_bounds(sf::RenderWindow& window, sf::FloatRect bounds) {
+void debug_draw_bounds(sf::RenderTexture& window, sf::FloatRect bounds) {
   sf::RectangleShape rect;
   if (bounds.size == sf::Vector2f(0, 0))
     std::cout << "[WARN] debug_draw_bounds: Size is 0, 0\n";
@@ -34,7 +53,27 @@ void debug_draw_bounds(sf::RenderWindow& window, sf::FloatRect bounds) {
 
 void set_window(sf::State state) {
   is_fullscreen = state == sf::State::Fullscreen;
-  window.create(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, state, window_settings);
+  render_window.create(sf::VideoMode(window_base_size), "Melodia", sf::Style::Default, state, window_settings);
+}
+
+void draw_window(sf::RenderWindow& render_window, sf::RenderTexture& window) {
+  no_invert_mask.display();
+
+  invert_shader.setUniform("texture", sf::Shader::CurrentTexture);
+  invert_shader.setUniform("mask", no_invert_mask.getTexture());
+
+  window.display();
+  sf::Sprite scene(window.getTexture());
+
+  render_window.clear();
+
+  if (dark_mode) {
+    render_window.draw(scene, &invert_shader);
+  } else {
+    render_window.draw(scene);
+  }
+
+  render_window.display();
 }
 
 void new_random() {
@@ -61,10 +100,92 @@ std::string exec(const char* cmd) {
 
 // ==============================================================================
 
+bool resize_image(std::string path, std::string output, sf::Vector2u target_size) {
+  int w, h, channels;
+  unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 0);
+
+  if (!data) {
+    throw std::runtime_error("Failed to decode image from " + path + ": " + stbi_failure_reason());
+    return false;
+  }
+
+  std::vector<unsigned char> resized(target_size.x * target_size.y * channels);
+
+  stbir_pixel_layout layout;
+  switch (channels) {
+    case 1: layout = STBIR_1CHANNEL; break;
+    case 2: layout = STBIR_2CHANNEL; break;
+    case 3: layout = STBIR_RGB; break;
+    case 4: layout = STBIR_RGBA; break;
+    default:
+      throw std::runtime_error("Unsupported channel count for cover art image.");
+      stbi_image_free(data);
+      return false;
+  }
+
+  stbir_resize(
+    data, w, h, 0,
+    resized.data(), target_size.x, target_size.y, 0,
+    layout,
+    STBIR_TYPE_UINT8,
+    STBIR_EDGE_CLAMP,
+    STBIR_FILTER_DEFAULT
+  );
+
+  if (!stbi_write_png(output.c_str(), target_size.x, target_size.y, channels, resized.data(), target_size.x * channels)) {
+    throw std::runtime_error("Failed to write resized image.");
+    stbi_image_free(data);
+    return false;
+  }
+
+  stbi_image_free(data);
+
+  return true;
+}
+
+bool rasterize_texture(std::string name) {
+  sfc::SVGImage svg;
+  if (svg.loadFromFile(base_path_misc + name + ".svg")) {
+    if (std::filesystem::exists(base_path_misc_rasters + name + ".png")) {
+      std::filesystem::remove(base_path_misc_rasters + name + ".png");
+    }
+    auto png_path = base_path_misc_rasters + name + ".png";
+    if (!svg.rasterize(2.f).saveToFile(png_path)) {
+      return false;
+    }
+
+    sf::Vector2u size;
+    try {
+      size = icon_sizes.at(name);
+      resize_image(png_path, png_path, size);
+    } catch (const std::out_of_range&) {
+      // do nothing
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+void rasterize_textures() {
+  for (const auto& entry : std::filesystem::directory_iterator{base_path_misc}) {
+    if (!std::filesystem::exists(base_path_misc_rasters + entry.path().stem().string() + ".png") && entry.path().extension().string() == ".svg") {
+      rasterize_texture(entry.path().stem().string());
+    }
+  }
+}
+
 std::shared_ptr<sf::Texture> load_texture(std::string name) {
+  if (!std::filesystem::exists(base_path_misc_rasters + name + ".png")) {
+    if (!rasterize_texture(name)) {
+      throw std::runtime_error("[ERROR] Cannot rasterize texture for '" + name + "'.\n");
+    }
+  }
+
   auto tex = std::make_shared<sf::Texture>();
-  if (!tex->loadFromFile(base_path_misc + name)) {
-    throw std::runtime_error("Failed to load '" + base_path_misc + name + "'.");
+  if (!tex->loadFromFile(base_path_misc_rasters + name + ".png")) {
+    throw std::runtime_error("Failed to load texture for '" + name + "'.");
   }
   tex->setSmooth(true);
   return tex;
@@ -233,119 +354,78 @@ std::vector<std::u32string> split_u32(const std::u32string& s, char32_t delim) {
   return result;
 }
 
-// From: https://www.geeksforgeeks.org/dsa/damerau-levenshtein-distance/
-int DamerauLevenstheinDistance(const std::u32string& s1, const std::u32string& s2) {
-  // Create a table to store the results of subproblems
-  std::vector<std::vector<int>> dp(s1.length() + 1, std::vector<int>(s2.length() + 1));
+// From: https://github.com/guilhermeagostinelli/levenshtein/blob/master/levenshtein.cpp
+int LevenshteinDistance(std::u32string word1, std::u32string word2) {
+  int size1 = word1.size();
+  int size2 = word2.size();
+  int verif[size1 + 1][size2 + 1];
 
-  // Initialize the table
-  for (size_t i = 0; i <= s1.length(); i++) {
-    dp[i][0] = i;
-  }
-  for (size_t j = 0; j <= s2.length(); j++) {
-    dp[0][j] = j;
-  }
+  if (size1 == 0)
+      return size2;
+  if (size2 == 0)
+      return size1;
 
-  // Populate the table using dynamic programming
-  for (size_t i = 1; i <= s1.length(); i++) {
-    for (size_t j = 1; j <= s2.length(); j++) {
-      if (s1[i-1] == s2[j-1]) {
-        dp[i][j] = dp[i-1][j-1];
-      } else {
-        dp[i][j] = 1 + std::min(dp[i-1][j], std::min(dp[i][j-1], dp[i-1][j-1]));
-      }
+  for (int i = 0; i <= size1; i++)
+    verif[i][0] = i;
+  for (int j = 0; j <= size2; j++)
+    verif[0][j] = j;
+
+  for (int i = 1; i <= size1; i++) {
+    for (int j = 1; j <= size2; j++) {
+      int cost = (word2[j - 1] == word1[i - 1]) ? 0 : 1;
+
+      verif[i][j] = std::min(
+        std::min(verif[i - 1][j] + 1, verif[i][j - 1] + 1),
+        verif[i - 1][j - 1] + cost
+      );
     }
   }
 
-  // Return the edit distance
-  return dp[s1.length()][s2.length()];
+  return verif[size1][size2];
 }
 
-bool _matching(const std::u32string& s1, const std::u32string& s2, float diff, const char split) {
-    auto s1_clean = s1;
-    auto s2_clean = s2;
-
-    std::transform(s1_clean.begin(), s1_clean.end(), s1_clean.begin(), to_lower_u32);
-    std::transform(s2_clean.begin(), s2_clean.end(), s2_clean.begin(), to_lower_u32);
-
-    if (isSubstring(s1_clean, s2_clean)) {
-      return true;
-    }
-
-    std::vector<std::u32string> s1_split = split_u32(s1_clean, static_cast<char32_t>(split));
-    std::vector<std::u32string> s2_split = split_u32(s2_clean, static_cast<char32_t>(split));
-
-    float score = 0;
-    int matches = 0;
-
-    for (size_t c = 0; c < s1_split.size(); c++) {
-      for (size_t d = 0; d < s2_split.size(); d++) {
-        const auto& i = s1_split[c];
-        const auto& j = s2_split[d];
-
-        // Calculate character difference
-        std::u32string diff_i_j, diff_j_i;
-        std::set_difference(i.begin(), i.end(), j.begin(), j.end(), std::inserter(diff_i_j, std::begin(diff_i_j)));
-        std::set_difference(j.begin(), j.end(), i.begin(), i.end(), std::inserter(diff_j_i, std::begin(diff_j_i)));
-
-        if (!(diff_i_j.size() + diff_j_i.size() <= diff)) {
-          score += std::min(diff_i_j.size(), diff_j_i.size());
-        }
-        else {
-          matches++;
-        }
-      }
-    }
-    score = score / matches; // inf if 0 otherwise the more matches there where the smaller the score
-
-    if (score < diff) {
-      return true;
-    }
-
-    return false;
-}
-
-bool strings_match(std::u32string s1, std::u32string s2, int threshold) {
+float strings_match(std::u32string s1, std::u32string s2, int threshold) {
   std::transform(s1.begin(), s1.end(), s1.begin(), to_lower_u32);
   std::transform(s2.begin(), s2.end(), s2.begin(), to_lower_u32);
 
   if (isSubstring(s1, s2))
-    return true;
+    return 1.f;
 
-  if (std::min(DamerauLevenstheinDistance(s1, s2), DamerauLevenstheinDistance(s2, s1)) <= threshold)
-    return true;
+  auto dist = std::min(LevenshteinDistance(s1, s2), LevenshteinDistance(s2, s1));
+  if (dist <= threshold)
+    return 1.f - dist / threshold; // The score is based on the distance - smaller distance = smaller the score
 
-  return false;
+  return 0.f;
 }
 
-bool chunks_match(const std::u32string& full_string, const std::u32string& small_string, int chunk_size) {
+float chunks_match(const std::u32string& full_string, const std::u32string& small_string, int chunk_size) {
   if (chunk_size <= 0 || full_string.size() < static_cast<size_t>(chunk_size))
-    return false;
+    return 0.f;
 
   for (size_t i = 0; i + chunk_size <= full_string.size(); i++) {
     std::u32string chunk = full_string.substr(i, chunk_size);
-    if (strings_match(small_string, chunk, 0))
-      return true;
+    return strings_match(small_string, chunk, 0);
   }
 
-  return false;
+  return 0.f;
 }
 
-bool matching(std::u32string s1, std::u32string s2, size_t threshold) {
-  if (strings_match(s1, s2, threshold))
-    return true;
+float matching(std::u32string s1, std::u32string s2, size_t threshold) {
+  // matching returns a score out of 1 of how good the match is 0 being the worst and 1 being the best
 
-  if (s1.length() < s2.length()) {
-    if (s1.length() > threshold) {
-      return chunks_match(s2, s1, (int)(s1.length() / 2));
-    }
-  } else {
-    if (s2.length() > threshold) {
-      return chunks_match(s1, s2, (int)(s1.length() / 2));
-    }
-  }
+  return strings_match(s1, s2, threshold);
 
-  return false;
+  // if (s1.length() < s2.length()) {
+  //   if (s1.length() > threshold * 1.2) {
+  //     return chunks_match(s2, s1, (int)(s1.length() / 2));
+  //   }
+  // } else {
+  //   if (s2.length() > threshold * 1.2) {
+  //     return chunks_match(s1, s2, (int)(s1.length() / 2));
+  //   }
+  // }
+
+  // return false;
 }
 
 std::string seconds_to_human_readable(float total_sec_left) {
@@ -397,9 +477,14 @@ void reset_globals() {
   focus_events.clear();
   scroll_events.clear();
 
-  ctrl_c_signal.reset();
-  ctrl_v_signal.reset();
-  ctrl_a_signal.reset();
+  copy_signal.reset();
+  paste_signal.reset();
+  select_all_signal.reset();
+  play_toggle_signal.reset();
+  confirm_signal.reset();
+  left_signal.reset();
+  right_signal.reset();
+  escape_signal.reset();
 
   // Reset the global z-index since
   // all the objects must be redrawn
@@ -416,4 +501,16 @@ sf::Color add_colors(sf::Color a, sf::Color b) {
 
 sf::Color add_int_to_color(sf::Color a, int b) {
   return sf::Color({(uint8_t)(a.r + b), (uint8_t)(a.g + b), (uint8_t)(a.b + b)});
+}
+
+int dot_colors(sf::Color a, sf::Color b) {
+  return (a.r * b.r) + (a.b * b.b) + (a.g * b.g);
+}
+
+sf::Color adjust_if_dark_mode(sf::Color a) {
+  if (dark_mode) {
+    float gray = dot_colors(a, sf::Color(0.299, 0.587, 0.114));
+    return sf::Color({(uint8_t)(1.f - gray), (uint8_t)(1.f - gray), (uint8_t)(1.f - gray), a.a});
+  }
+  return a;
 }

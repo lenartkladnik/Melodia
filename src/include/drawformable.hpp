@@ -103,7 +103,7 @@ struct DTCache {
     items.clear();
   }
 
-  void draw(int id, sf::RenderWindow& window) const {
+  void draw(int id, sf::RenderTexture& window) const {
     auto& vec = items[find(id)];
 
     for (auto dt : vec) {

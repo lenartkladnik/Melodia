@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <SFML/Window/Export.hpp>
+
 #include "data.hpp"
 #include "events.hpp"
 #include "signals.hpp"
@@ -75,7 +76,8 @@ class InputComponent : public UIComponent {
     std::string component_id;
     std::u32string input_string = U"";
     size_t cursor_pos = 0;
-    sf::RenderWindow& window;
+    sf::RenderTexture& window;
+    sf::RenderWindow& render_window;
     bool show_cursor = false;
     bool reset_cursor_flag = false;
     bool input_active = false;
@@ -89,6 +91,7 @@ class InputComponent : public UIComponent {
     sf::Text input_text;
     std::shared_ptr<sf::Texture> action_button_tex;
     std::optional<sf::Sprite> action_button;
+    std::function<void(MenuData&)> action_function;
     size_t selection_start = std::string::npos;
     size_t selection_end = std::string::npos;
     bool selecting = false;
@@ -97,11 +100,14 @@ class InputComponent : public UIComponent {
     bool text_replica = false;
     bool select_all_on_click = false;
     bool focus_event_else_is_empty = false;
+    size_t normal_s_start = std::string::npos; // normal_s_start is guaranteed <= normal_s_end
+    size_t normal_s_end = std::string::npos;
 
   public:
     // Arguments for constructors
     struct Args {
       struct InputField {
+        sf::RenderTexture& window;
         sf::RenderWindow& render_window;
         std::string id;
         sf::Vector2f size;
@@ -115,6 +121,7 @@ class InputComponent : public UIComponent {
       };
 
       struct TextReplica {
+        sf::RenderTexture& window;
         sf::RenderWindow& render_window;
         std::string id;
         std::shared_ptr<sf::Text> text_reference;
@@ -124,12 +131,14 @@ class InputComponent : public UIComponent {
     };
 
     // Input field input component
-    InputComponent(Args::InputField arguments)
+    InputComponent(MenuData& menu_data, Args::InputField arguments)
       : UIComponent(arguments.id, arguments.hidden),
-        window(arguments.render_window),
+        window(arguments.window),
+        render_window(arguments.render_window),
         input_prompt(arguments.prompt),
         corner_radius(arguments.corner_radius),
         input_text(default_font, arguments.prompt, 20),
+        action_function(arguments.action_function),
         focus_event_else_is_empty(arguments.no_focus_event_else)
 
     {
@@ -195,15 +204,14 @@ class InputComponent : public UIComponent {
         },
         sf::Mouse::Button::Left, this);
 
-      ctrl_c_signal.connect(arguments.id, [this](){this->copy();});
-      ctrl_v_signal.connect(arguments.id, [this](){this->paste();});
-      ctrl_a_signal.connect(arguments.id, [this](){this->select_all();});
+      connect_signals(menu_data);
     }
 
     // Text replica input component
-    InputComponent(Args::TextReplica arguments)
+    InputComponent(MenuData& menu_data, Args::TextReplica arguments)
       : UIComponent(arguments.id),
-        window(arguments.render_window),
+        window(arguments.window),
+        render_window(arguments.render_window),
         input_prompt(arguments.text_reference->getString().toUtf32()),
         input_text(default_font, arguments.text_reference->getString(), 20),
         select_all_on_click(arguments.select_all_on_click)
@@ -235,9 +243,7 @@ class InputComponent : public UIComponent {
         },
       sf::Mouse::Button::Left, this);
 
-      ctrl_c_signal.connect(arguments.id, [this](){this->copy();});
-      ctrl_v_signal.connect(arguments.id, [this](){this->paste();});
-      ctrl_a_signal.connect(arguments.id, [this](){this->select_all();});
+      connect_signals(menu_data);
     }
 
     InputComponent() = delete;
@@ -247,9 +253,7 @@ class InputComponent : public UIComponent {
       remove_if_event(release_events, component_id);
       remove_if_event(click_events, component_id + "_action_button");
       remove_if_event(focus_events, component_id);
-      ctrl_c_signal.disconnect(component_id);
-      ctrl_v_signal.disconnect(component_id);
-      ctrl_a_signal.disconnect(component_id);
+      disconnect_signals();
     }
 
     // Disallow copy
@@ -259,6 +263,28 @@ class InputComponent : public UIComponent {
     // Disallow move
     InputComponent(InputComponent&&) = delete;
     InputComponent& operator=(InputComponent&&) = delete;
+
+    void connect_signals(MenuData& menu_data) {
+      MenuData* menu_data_ptr = &menu_data;
+
+      copy_signal.connect(component_id, [this](){ if (this->m_focused) this->copy(); });
+      paste_signal.connect(component_id, [this](){ if (this->m_focused) this->paste(); });
+      select_all_signal.connect(component_id, [this](){ if (this->m_focused) this->select_all(); });
+      left_signal.connect(component_id, [this](){ if (this->m_focused) this->move_cursor(-1); });
+      right_signal.connect(component_id, [this](){ if (this->m_focused) this->move_cursor(1); });
+      confirm_signal.connect(component_id, [this, menu_data_ptr](){ if (this->m_focused && this->action_function) this->action_function(*menu_data_ptr); });
+      escape_signal.connect(component_id, [this](){ if (this->m_focused) this->unfocus(); });
+    }
+
+    void disconnect_signals() {
+      copy_signal.disconnect(component_id);
+      paste_signal.disconnect(component_id);
+      select_all_signal.disconnect(component_id);
+      left_signal.disconnect(component_id);
+      right_signal.disconnect(component_id);
+      confirm_signal.disconnect(component_id);
+      escape_signal.disconnect(component_id);
+    }
 
     void draw() {
       if (!is_hidden()) {
@@ -312,21 +338,14 @@ class InputComponent : public UIComponent {
       show_cursor = true;
     }
 
-    void move_cursor_left() {
-      if (cursor_pos > 0) {
-        // Keep cursor solid while changing cursor pos
-        reset_cursor();
+    void move_cursor(int move) {
+      // Keep cursor solid while changing position
+      reset_cursor();
 
-        cursor_pos--;
-      }
-    }
+      int new_cursor_pos = (int)cursor_pos + move;
 
-    void move_cursor_right() {
-      if (cursor_pos < input_string.size()) {
-        // Keep cursor solid while changing cursor pos
-        reset_cursor();
-
-        cursor_pos++;
+      if (new_cursor_pos >= 0 && new_cursor_pos <= (int)input_string.size()) {
+        cursor_pos = (size_t)new_cursor_pos;
       }
     }
 
@@ -339,25 +358,38 @@ class InputComponent : public UIComponent {
       input_text.setString(input_string);
     }
 
+    void delete_selection() {
+      if (selected_text.empty()) return;
+
+      input_string.erase(normal_s_start, normal_s_end - normal_s_start); // Remove what was in the selection
+      cursor_pos = std::min(normal_s_start, input_string.size());
+      deselect();
+    }
+
     void write_char(char32_t input, bool unblock = false) {
       if (!m_focused && !unblock) return; // Refuse to write
 
       // Keep cursor solid while inputting
       reset_cursor();
 
-      if (input < 32) {
+      if (input < 32 || input == 127) {
         switch (input) {
-          case 8:
-            if (input_string.size() > 0 && cursor_pos > 0) {
-              if (selection_start != std::string::npos) {
-                cursor_pos = 0;
-                input_string = U"";
-                deselect();
-              } else {
-                cursor_pos--;
-                input_string.erase(cursor_pos, 1);
-              }
+          case 8: // Backspace
+            if (!selected_text.empty()) {
+              delete_selection();
+            } else if (input_string.size() > 0 && cursor_pos > 0) {
+              cursor_pos--;
+              input_string.erase(cursor_pos, 1);
             }
+            break;
+
+          case 127: // Delete
+            if (!selected_text.empty()) {
+              delete_selection();
+            } else if (input_string.size() > 0 && cursor_pos < input_string.size()) {
+              input_string.erase(cursor_pos, 1);
+            }
+
             break;
         }
       }
@@ -365,10 +397,10 @@ class InputComponent : public UIComponent {
         std::u32string str_input;
         str_input += input;
 
-        if (selection_start != std::string::npos) {
-          input_string.erase(selection_start, selection_end - selection_start); // Remove what was in the selection
-          input_string.insert(selection_start, str_input);
-          cursor_pos = std::min(selection_start + 1, input_string.size());
+        if (!selected_text.empty()) {
+          input_string.erase(normal_s_start, normal_s_end - normal_s_start); // Remove what was in the selection
+          input_string.insert(normal_s_start, str_input);
+          cursor_pos = std::min(normal_s_start + 1, input_string.size());
           deselect();
         } else {
           input_string.insert(cursor_pos, str_input);
@@ -404,6 +436,8 @@ class InputComponent : public UIComponent {
         selection_start = 0;
         selection_end = input_string.size();
         selected_text = input_string;
+        normal_s_start = selection_start;
+        normal_s_end = selection_end;
       }
     }
 
@@ -412,11 +446,12 @@ class InputComponent : public UIComponent {
 
       deselect();
 
-      selecting = true;
-
       input_active = true;
-
       input_text.setFillColor(text_color);
+
+      if (pos == sf::Vector2f{-1, -1}) return; // Prevent any extra actions (selecting, changing cursor position, ...)
+
+      selecting = true;
 
       if (input_string.empty()) {
         cursor_pos = 0;
@@ -462,19 +497,21 @@ class InputComponent : public UIComponent {
 
     void select() {
       if (selection_start != std::string::npos) {
-        selection_end = find_character_at_pos_x(input_string, input_text, get_mouse_pos(window).x);
-        selected_text = input_string.substr(selection_start, selection_end - selection_start);
+        selection_end = find_character_at_pos_x(input_string, input_text, get_mouse_pos(render_window).x);
+
+        normal_s_end = selection_end;
+        normal_s_start = selection_start;
+
+        if (normal_s_end < normal_s_start)
+          std::swap(normal_s_end, normal_s_start);
+
+        selected_text = input_string.substr(normal_s_start, normal_s_end - normal_s_start);
       }
     }
 
     void draw_selection() {
       if (selection_start == selection_end)
         return; // No selection
-
-      if (selection_start > selection_end) {
-        // Selecting backwards
-        std::swap(selection_start, selection_end);
-      }
 
       auto start = find_character_pos(input_text, selection_start);
       auto end = find_character_pos(input_text, selection_end);
@@ -577,6 +614,7 @@ class InputComponent : public UIComponent {
     void register_action(std::function<void(MenuData&)> action_function) {
       if (action_button) {
         new_click_event(click_events, id + "_action_button", [action_function](MenuData& menu_data) {
+          std::cout << "PRESSED!!" << "\n";
           action_function(menu_data);
         }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
       }
@@ -588,7 +626,7 @@ class ButtonComponent : public UIComponent {
   // - Add pressed down styling
 
   private:
-    sf::RenderWindow& window;
+    sf::RenderTexture& window;
     sf::RoundedRectangleShape button_shape;
     sf::Text button_text;
     std::function<void(MenuData&)> function;
@@ -597,7 +635,7 @@ class ButtonComponent : public UIComponent {
   public:
     struct Args {
       struct BasicButton {
-        sf::RenderWindow& render_window;
+        sf::RenderTexture& window;
         std::string id;
         std::string text;
         sf::Vector2f size;
@@ -612,7 +650,7 @@ class ButtonComponent : public UIComponent {
 
     ButtonComponent(Args::BasicButton arguments)
       : UIComponent(arguments.id, arguments.hidden),
-        window(arguments.render_window),
+        window(arguments.window),
         button_text(default_font, arguments.text, 0),
         function(arguments.function),
         m_button_shape_color(arguments.button_shape_color)
@@ -657,7 +695,7 @@ class ButtonComponent : public UIComponent {
     void on_hover() {
       m_hover = true;
 
-      button_shape.setFillColor(m_button_shape_color - hover_sub);
+      button_shape.setFillColor(add_int_to_color(m_button_shape_color, -hover_sub));
     }
 
     void off_hover() {
@@ -795,6 +833,7 @@ class AreaComponent : public UIComponent {
         std::string id;
         sf::FloatRect bounds;
         std::function<void(MenuData&)> function;
+        sf::View view = default_view;
         bool permanent = true;
         int rank = 0;
       };
@@ -804,10 +843,13 @@ class AreaComponent : public UIComponent {
       : UIComponent(arguments.id),
       m_bounds(arguments.bounds)
     {
-      new_click_event(click_events, arguments.id, arguments.function, m_bounds, sf::Mouse::Button::Left, arguments.permanent ? this : nullptr, default_view, arguments.rank);
+      new_click_event(click_events, arguments.id, arguments.function, m_bounds, sf::Mouse::Button::Left, arguments.permanent ? this : nullptr, arguments.view, arguments.rank);
     }
 
-    ~AreaComponent() = default;
+    ~AreaComponent()
+    {
+      remove_if_event(click_events, id);
+    }
 
     sf::FloatRect get_bounds() {
       return m_bounds;
