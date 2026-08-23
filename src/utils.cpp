@@ -145,7 +145,11 @@ bool rasterize_texture(std::string name) {
 
     sf::Vector2u size;
     try {
-      size = icon_sizes.at(name);
+      std::string icon_id = name;
+      if (name.find(inverted_image_suffix) != std::string::npos) {
+        icon_id = name.erase(name.find(inverted_image_suffix), inverted_image_suffix.size());
+      }
+      size = icon_sizes.at(icon_id);
       resize_image(png_path, png_path, size);
     } catch (const std::out_of_range&) {
       // do nothing
@@ -165,15 +169,44 @@ void rasterize_textures() {
   }
 }
 
-std::shared_ptr<sf::Texture> load_texture(std::string name) {
+std::shared_ptr<sf::Texture> load_texture(std::string name, bool no_invert) {
+  if (dark_mode && !no_invert) {
+    // First try to load an inverted variant if there is one present
+    try {
+      return load_texture(name + inverted_image_suffix, true);
+    } catch (...) {
+      // Load the normal texture and invert manually
+    }
+  }
+
   if (!std::filesystem::exists(base_path_misc_rasters + name + ".png")) {
     if (!rasterize_texture(name)) {
       throw std::runtime_error("[ERROR] Cannot rasterize texture for '" + name + "'.\n");
     }
   }
 
+  sf::Image im;
+  if (!im.loadFromFile(base_path_misc_rasters + name + ".png")) {
+    throw std::runtime_error("Failed to load image for '" + name + "'.");
+  }
+  // Invert the colors of the texture if dark mode is on
+  if (dark_mode && !no_invert) {
+    auto size = im.getSize();
+    for (unsigned int y = 0; y < size.y; y++) {
+      for (unsigned int x = 0; x < size.x; x++) {
+        auto pixel = im.getPixel({x, y});
+        // Only invert mostly black pixels
+        if (is_color_black(pixel)) {
+          pixel.r = 255 - pixel.r;
+          pixel.g = 255 - pixel.g;
+          pixel.b = 255 - pixel.b;
+          im.setPixel({x, y}, pixel);
+        }
+      }
+    }
+  }
   auto tex = std::make_shared<sf::Texture>();
-  if (!tex->loadFromFile(base_path_misc_rasters + name + ".png")) {
+  if (!tex->loadFromImage(im)) {
     throw std::runtime_error("Failed to load texture for '" + name + "'.");
   }
   tex->setSmooth(true);
@@ -492,14 +525,24 @@ sf::Color add_int_to_color(sf::Color a, int b) {
   return sf::Color({(uint8_t)(a.r + b), (uint8_t)(a.g + b), (uint8_t)(a.b + b)});
 }
 
-int dot_colors(sf::Color a, sf::Color b) {
-  return (a.r * b.r) + (a.b * b.b) + (a.g * b.g);
+float dot_colors(sf::Color a, float wr, float wg, float wb) {
+  return (a.r / 255.f) * wr + (a.g / 255.f) * wg + (a.b / 255.f) * wb;
 }
 
 sf::Color adjust_if_dark_mode(sf::Color a) {
   if (dark_mode) {
-    float gray = dot_colors(a, sf::Color(0.299, 0.587, 0.114));
-    return sf::Color({(uint8_t)(1.f - gray), (uint8_t)(1.f - gray), (uint8_t)(1.f - gray), a.a});
+    float gray = dot_colors(a, 0.299f, 0.587f, 0.114f);
+    float invf = 1.f - gray;
+    uint8_t invu = (uint8_t)(invf * 255.f + 0.5f);
+    return sf::Color(invu, invu, invu, a.a);
   }
   return a;
+}
+
+bool color_less_than_color(sf::Color a, sf::Color b) {
+  return a.r < b.r && a.g < b.g && a.b < b.b;
+}
+
+bool is_color_black(sf::Color a) {
+  return color_less_than_color(a, sf::Color{black_threshold, black_threshold, black_threshold});
 }

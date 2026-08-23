@@ -91,29 +91,33 @@ extern const std::unordered_map<std::string, sf::Vector2u> icon_sizes({
   {"cancel", {26, 26}}
 });
 
-const sf::Color main_color = adjust_if_dark_mode({232, 224, 209});
-const sf::Color dark_main_color = add_int_to_color(main_color, -5); // ({209, 204, 194});
-const sf::Color background_color = adjust_if_dark_mode({227, 219, 211}); //({196, 186, 189});
-const sf::Color dark_background_color = add_int_to_color(background_color, -5); // ({156, 146, 149});
-const sf::Color light_background_color = adjust_if_dark_mode({217, 211, 200});
-const sf::Color lighter_background_color = adjust_if_dark_mode({0, 0, 0, 5});
-const sf::Color background_shadow_color = add_int_to_color(background_color, -20); // ({176, 166, 169});
-const sf::Color dark_background_shadow_color = add_int_to_color(dark_background_color, -10); // ({153, 144, 147});
-const sf::Color background_shadow_color_transparent({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
-const sf::Color dark_background_shadow_color_transparent({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
-const sf::Color progress_color = adjust_if_dark_mode({180, 180, 180});
-const sf::Color progress_done_color = adjust_if_dark_mode({32, 32, 32});
-const sf::Color text_color = adjust_if_dark_mode({10, 10, 10});
-const sf::Color cursor_color = adjust_if_dark_mode({40, 40, 40});
-const sf::Color light_text_color = adjust_if_dark_mode({80, 80, 80});
-const sf::Color lighter_text_color = adjust_if_dark_mode({120, 120, 120});
-const sf::Color white_color = adjust_if_dark_mode({212, 212, 212});
-const sf::Color title_color = text_color;
-const sf::Color artist_color = light_text_color;
-const sf::Color selection_color = adjust_if_dark_mode({181, 215, 255});
-const sf::Color cancel_area_color = adjust_if_dark_mode({255, 0, 0, 20});
+sf::Color main_color;
+sf::Color dark_main_color;
+sf::Color background_color;
+sf::Color dark_background_color;
+sf::Color light_background_color;
+sf::Color lighter_background_color;
+sf::Color background_shadow_color;
+sf::Color dark_background_shadow_color;
+sf::Color background_shadow_color_transparent;
+sf::Color dark_background_shadow_color_transparent;
+sf::Color progress_color;
+sf::Color progress_done_color;
+sf::Color text_color;
+sf::Color cursor_color;
+sf::Color light_text_color;
+sf::Color lighter_text_color;
+sf::Color white_color;
+sf::Color title_color;
+sf::Color artist_color;
+sf::Color selection_color;
+sf::Color cancel_area_color;
+sf::Color volume_slider_color;
 
 extern const int hover_sub = 20;
+extern const uint8_t black_threshold = 20;
+
+extern const std::string inverted_image_suffix = "-inverted";
 
 const sf::Cursor default_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Arrow).value();
 const sf::Cursor text_cursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Text).value();
@@ -139,3 +143,28 @@ bool search_was_active = false;
 
 std::random_device rd;
 std::mt19937 rand_generator(rd());
+
+void set_colors() {
+  main_color = adjust_if_dark_mode({232, 224, 209});
+  dark_main_color = add_int_to_color(main_color, -5);
+  background_color = adjust_if_dark_mode({227, 219, 211});
+  dark_background_color = add_int_to_color(background_color, -5);
+  light_background_color = adjust_if_dark_mode({217, 211, 200});
+  lighter_background_color = adjust_if_dark_mode({0, 0, 0, 5});
+  background_shadow_color = add_int_to_color(background_color, -20);
+  dark_background_shadow_color = add_int_to_color(dark_background_color, -10);
+  background_shadow_color_transparent = sf::Color({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
+  dark_background_shadow_color_transparent = sf::Color({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
+  progress_color = adjust_if_dark_mode({180, 180, 180});
+  progress_done_color = adjust_if_dark_mode({32, 32, 32});
+  text_color = adjust_if_dark_mode({10, 10, 10});
+  cursor_color = adjust_if_dark_mode({40, 40, 40});
+  light_text_color = adjust_if_dark_mode({80, 80, 80});
+  lighter_text_color = adjust_if_dark_mode({120, 120, 120});
+  white_color = adjust_if_dark_mode({212, 212, 212});
+  title_color = text_color;
+  artist_color = light_text_color;
+  selection_color = adjust_if_dark_mode({181, 215, 255});
+  cancel_area_color = adjust_if_dark_mode({255, 0, 0, 20});
+  volume_slider_color = adjust_if_dark_mode({10, 10, 10});
+}

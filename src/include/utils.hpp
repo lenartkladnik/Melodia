@@ -13,7 +13,7 @@ std::string exec(const char* cmd);
 bool resize_image(std::string path, std::string output, sf::Vector2u target_size);
 bool rasterize_texture(std::string name);
 void rasterize_textures();
-std::shared_ptr<sf::Texture> load_texture(std::string path);
+std::shared_ptr<sf::Texture> load_texture(std::string name, bool no_invert = false);
 bool is_string_valid_name(const std::string& s);
 void mkdir(std::string path);
 bool must_exist(std::string path);
@@ -34,7 +34,10 @@ void reset_globals();
 sf::Color sub_colors(sf::Color a, sf::Color b);
 sf::Color add_colors(sf::Color a, sf::Color b);
 sf::Color add_int_to_color(sf::Color a, int b);
+float dot_colors(sf::Color a, float wr, float wg, float wb);
 sf::Color adjust_if_dark_mode(sf::Color a);
+bool color_less_than_color(sf::Color a, sf::Color b);
+bool is_color_black(sf::Color a);
 
 template<typename TShape>
 void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {

@@ -20,6 +20,8 @@ int main() {
   if (!ensure_storage())
     return 1;
 
+  set_colors();
+
   // Load some assets
 
   sf::Image icon;

@@ -70,29 +70,33 @@ extern int global_z_index;
 
 extern const std::unordered_map<std::string, sf::Vector2u> icon_sizes;
 
-extern const sf::Color main_color;
-extern const sf::Color dark_main_color;
-extern const sf::Color background_color;
-extern const sf::Color dark_background_color;
-extern const sf::Color light_background_color;
-extern const sf::Color lighter_background_color;
-extern const sf::Color background_shadow_color;
-extern const sf::Color dark_background_shadow_color;
-extern const sf::Color background_shadow_color_transparent;
-extern const sf::Color dark_background_shadow_color_transparent;
-extern const sf::Color progress_color;
-extern const sf::Color progress_done_color;
-extern const sf::Color text_color;
-extern const sf::Color cursor_color;
-extern const sf::Color light_text_color;
-extern const sf::Color lighter_text_color;
-extern const sf::Color white_color;
-extern const sf::Color title_color;
-extern const sf::Color artist_color;
-extern const sf::Color selection_color;
-extern const sf::Color cancel_area_color;
+extern sf::Color main_color;
+extern sf::Color dark_main_color;
+extern sf::Color background_color;
+extern sf::Color dark_background_color;
+extern sf::Color light_background_color;
+extern sf::Color lighter_background_color;
+extern sf::Color background_shadow_color;
+extern sf::Color dark_background_shadow_color;
+extern sf::Color background_shadow_color_transparent;
+extern sf::Color dark_background_shadow_color_transparent;
+extern sf::Color progress_color;
+extern sf::Color progress_done_color;
+extern sf::Color text_color;
+extern sf::Color cursor_color;
+extern sf::Color light_text_color;
+extern sf::Color lighter_text_color;
+extern sf::Color white_color;
+extern sf::Color title_color;
+extern sf::Color artist_color;
+extern sf::Color selection_color;
+extern sf::Color cancel_area_color;
+extern sf::Color volume_slider_color;
 
 extern const int hover_sub;
+extern const uint8_t black_threshold;
+
+extern const std::string inverted_image_suffix;
 
 extern const sf::Cursor default_cursor;
 extern const sf::Cursor text_cursor;
@@ -118,6 +122,8 @@ extern bool search_was_active;
 
 extern std::random_device rd;
 extern std::mt19937 rand_generator;
+
+void set_colors();
 
 class MusicPlayer {
   public:

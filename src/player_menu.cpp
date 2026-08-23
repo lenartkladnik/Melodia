@@ -404,7 +404,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf:
   auto volume = music->get_volume();
   sf::RoundedRectangleShape vol_slider_full({player_data.vol_slider.getGlobalBounds().size.x * volume, player_data.vol_slider.getGlobalBounds().size.y}, vol_round, vol_n);
   vol_slider_full.setPosition(player_data.vol_slider.getPosition());
-  vol_slider_full.setFillColor({10, 10, 10});
+  vol_slider_full.setFillColor(volume_slider_color);
 
   window.clear(main_color);
 
@@ -443,14 +443,6 @@ void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf:
   window.draw(player_data.queue_background);
   window.draw(*player_data.queue_toggle);
   if (player_data.queue_half_expanded) {
-    // window.draw(player_data.search_background);
-    // window.draw(*player_data.search_before_cursor);
-    // if (show_cursor) {
-    //   input_draw_cursor(window, *player_data.search_before_cursor, player_data.search_background);
-    // }
-    // auto search_after_cursor = player_data.search_after_cursor; // Create a mutable copy of search_after_cursor
-    // search_after_cursor->setPosition({player_data.search_before_cursor->getPosition().x + player_data.search_before_cursor->getGlobalBounds().size.x + 2.8f, player_data.search_before_cursor->getPosition().y});
-    // window.draw(*search_after_cursor);
     player_data.search->draw();
   }
 
