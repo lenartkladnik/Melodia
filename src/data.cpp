@@ -116,6 +116,7 @@ sf::Color volume_slider_color;
 
 extern const int hover_sub = 20;
 extern const uint8_t black_threshold = 20;
+extern const uint8_t soft_white = 220;
 
 extern const std::string inverted_image_suffix = "-inverted";
 

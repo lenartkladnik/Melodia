@@ -197,9 +197,9 @@ std::shared_ptr<sf::Texture> load_texture(std::string name, bool no_invert) {
         auto pixel = im.getPixel({x, y});
         // Only invert mostly black pixels
         if (is_color_black(pixel)) {
-          pixel.r = 255 - pixel.r;
-          pixel.g = 255 - pixel.g;
-          pixel.b = 255 - pixel.b;
+          pixel.r = soft_white - pixel.r;
+          pixel.g = soft_white - pixel.g;
+          pixel.b = soft_white - pixel.b;
           im.setPixel({x, y}, pixel);
         }
       }
@@ -533,7 +533,7 @@ sf::Color adjust_if_dark_mode(sf::Color a) {
   if (dark_mode) {
     float gray = dot_colors(a, 0.299f, 0.587f, 0.114f);
     float invf = 1.f - gray;
-    uint8_t invu = (uint8_t)(invf * 255.f + 0.5f);
+    uint8_t invu = (uint8_t)(invf * (float)(soft_white) + 0.5f);
     return sf::Color(invu, invu, invu, a.a);
   }
   return a;

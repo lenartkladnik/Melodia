@@ -95,6 +95,7 @@ extern sf::Color volume_slider_color;
 
 extern const int hover_sub;
 extern const uint8_t black_threshold;
+extern const uint8_t soft_white;
 
 extern const std::string inverted_image_suffix;
 
