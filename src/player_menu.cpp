@@ -396,7 +396,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf:
   sf::Text time_left(default_font, music->get_human_left_duration());
   setFontSize(time_left, medium_font_size);
   time_left.setPosition({progress_done.getPosition().x + player_data.progress_width + 10.f, player_data.progress.getPosition().y - 5.f});
-  time_left.setFillColor({66, 66, 66});
+  time_left.setFillColor(light_text_color);
 
   if (music->is_playing()) main_control->setTexture(*player_data.pause_tex);
   else main_control->setTexture(*player_data.play_tex);
