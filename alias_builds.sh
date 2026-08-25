@@ -27,4 +27,26 @@ function build_debug() {
   build_debug_l1 "$1"
 }
 
-alias build_all="scons"
+function build_all_archive() {
+  v=$1
+  if [[ -z $v ]]; then
+    v="latest"
+  fi
+  scons build=release target=all version="$v" archive=on
+}
+
+function build_all_no_archive() {
+  v=$1
+  if [[ -z $v ]]; then
+    v="latest"
+  fi
+  scons build=release target=all version="$v"
+}
+
+function build_all() {
+  v=$1
+  if [[ -z $v ]]; then
+    v="latest"
+  fi
+  scons build=release target=all version="$v" archive=on copy_bin=on
+}

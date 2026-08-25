@@ -235,7 +235,7 @@ bool must_exist(std::string path) {
 }
 
 std::string get_stem(std::string path) {
-  return std::filesystem::path(path).stem();
+  return std::filesystem::path(path).stem().string();
 }
 
 std::string insert_in_stem(std::string path, std::string s) {

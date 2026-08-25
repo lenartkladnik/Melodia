@@ -4,10 +4,14 @@ import shutil
 import pathlib
 import glob
 
+# scons build=release|debug target=all|linux|windows|macos archive=on|off copy_bin=on|off version= main=
+
 build = ARGUMENTS.get("build", "release")
 target = ARGUMENTS.get("target", "all")
 main_path = ARGUMENTS.get("main", "main.cpp")
 version = ARGUMENTS.get("version", "latest")
+archive = ARGUMENTS.get("archive", "off") == "on"
+copy_bin = ARGUMENTS.get("copy_bin", "off") == "on"
 
 project_name = "Melodia"
 cpp_standard = "20"
@@ -56,56 +60,64 @@ no_extras_in_build = [
 ]
 
 def create_dist(target, archive_dist: bool):
-    dist_path = target[0][1]
-    target_path = pathlib.Path(temp_dist_dir)
+    dist_path = pathlib.Path(target[0][1]).resolve()
     platform = target[0][0]
-    # bin_ext = ".exe" if platform == "windows" else ""
+    temp_path = pathlib.Path(temp_dist_dir, platform).resolve()
+
     archive_ext = "gztar" if platform == "linux" else "zip"
+    bin_ext = ".exe" if platform == "windows" else ""
 
-    os.makedirs(target_path, exist_ok=True)
+    temp_path.mkdir(parents=True, exist_ok=True)
+    (temp_path / "external/programs").mkdir(parents=True, exist_ok=True)
 
-    print(f"Creating archive for {platform} ({version})")
-
-    os.makedirs(pathlib.Path(target_path, "external/programs"), exist_ok=True) # yt-dlp will be downloaded into here at runtime
-
-    # def copy_prog(prog_name):
-    #     shutil.copy(f"external/prog/{prog_name}/{prog_name}_{platform}", pathlib.Path(target_path, pathlib.Path(f"external/programs/{prog_name}{bin_ext}")))
-
-    # copy_prog("yt-dlp")
-    # copy_prog("ffmpeg")
-    # copy_prog("ffprobe")
-
-    shutil.copytree("misc", pathlib.Path(target_path, "misc"))
-
-    os.makedirs(pathlib.Path(target_path, ".music_data/data"))
-    os.makedirs(pathlib.Path(target_path, ".music_data/playlists"))
+    shutil.copytree(
+        "misc",
+        temp_path / "misc",
+        dirs_exist_ok=True,
+    )
 
     if archive_dist:
-        archive_stem = dist_path + f"/Melodia-{platform}-{version}"
-        archive_path = f"{archive_stem}.{archive_ext.replace('gztar', 'tar.gz')}"
+        print(f"Creating archive for {platform} ({version})")
 
-        if os.path.exists(archive_path):
-            os.remove(archive_path)
+        dist_path.mkdir(parents=True, exist_ok=True)
 
-        shutil.make_archive(archive_stem, archive_ext, target_path)
+        archive_stem = dist_path / f"Melodia-{platform}-{version}"
+        archive_path = pathlib.Path(
+            f"{archive_stem}.{archive_ext.replace('gztar', 'tar.gz')}"
+        )
 
-        shutil.rmtree(target_path)
+        if archive_path.exists():
+            archive_path.unlink()
+
+        shutil.make_archive(
+            str(archive_stem),
+            archive_ext,
+            root_dir=str(temp_path),
+        )
+
+        if copy_bin:
+            shutil.move(temp_path / f"Melodia{bin_ext}", str(archive_stem) + bin_ext)
 
     else:
-        dir_path = pathlib.Path(dist_path, version)
-        os.makedirs(dir_path, exist_ok=True)
+        print(f"Creating destination directory for {platform} ({version})")
 
-        for item in pathlib.Path(target_path).glob("*"):
-            if os.path.exists(str(pathlib.Path(dir_path, item.name))) and item.name != ".music_data":
-                try:
-                    shutil.rmtree(str(pathlib.Path(dir_path, item.name)))
-                except NotADirectoryError:
-                    os.remove(str(pathlib.Path(dir_path, item.name)))
+        dir_path = dist_path / version
+        dir_path.mkdir(parents=True, exist_ok=True)
 
-            if item.name != ".music_data" or not os.path.exists(str(pathlib.Path(dir_path, item.name))):
-                shutil.move(str(item), str(pathlib.Path(dir_path, item.name)))
+        for item in temp_path.iterdir():
+            destination = dir_path / item.name
 
-    shutil.rmtree(target_path)
+            if destination.exists() and item.name != ".music_data":
+                if destination.is_dir():
+                    shutil.rmtree(destination)
+                else:
+                    destination.unlink()
+
+            if item.name != ".music_data" or not destination.exists():
+                shutil.move(str(item), str(destination))
+
+    if temp_path.exists():
+        shutil.rmtree(temp_path)
 
 def build_target(env, platform):
     build_dir = f"build/{platform}"
@@ -118,7 +130,7 @@ def build_target(env, platform):
             f"{out_dir}/{platform}"
         ],
         env.Program(
-            target=f"{temp_dist_dir}/{project_name + ".exe" if platform == "windows" else project_name}",
+            target=f"{temp_dist_dir}/{platform}/{project_name + ".exe" if platform == "windows" else project_name}",
             source=[f"{build_dir}/{src}" for src in sources],
         )
     )
@@ -398,7 +410,9 @@ if target in ("all", "windows"):
             "harfbuzz",
             "freetype",
             "crypt32",
-            "ws2_32"
+            "ws2_32",
+            "libbcrypt",
+            "libicudt"
         ],
         CPPDEFINES=["SFML_STATIC"]
     )
@@ -416,6 +430,8 @@ if target in ("all", "macos"):
     ensure_sfml_build(build_dir, [
         "-DCMAKE_BUILD_TYPE=Release",
         "-DBUILD_SHARED_LIBS=FALSE",
+        "-DMBEDTLS_THREADING_C=ON",
+        "-DMBEDTLS_THREADING_PTHREAD=ON"
     ])
 
     env = base.Clone()
@@ -437,6 +453,8 @@ if target in ("all", "macos"):
 
 def post_build(*args, **kwargs):
     for target in targets:
-        create_dist(target, not "debug" in build)
+        create_dist(target, archive and (not "debug" in build))
+
+    shutil.rmtree(temp_dist_dir, ignore_errors=True)
 
 Default(base.Command("post_build", [x[1] for x in targets], post_build))

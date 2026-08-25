@@ -102,3 +102,18 @@
 
 ## building
 - add BUILDING.md
+- dependency list for building all
+  - scons
+  - gcc
+  - clang
+  - mingw-w64
+  - mingw-w64-icu
+
+  - #### Arch Linux
+  ```bash
+  pacman -S scons
+  pacman -S gcc
+  pacman -S clang
+  pacman -S mingw-w64 # Select all
+  yay -S mingw-w64-icu
+  ```
