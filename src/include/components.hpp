@@ -76,8 +76,6 @@ class InputComponent : public UIComponent {
     std::string component_id;
     std::u32string input_string = U"";
     size_t cursor_pos = 0;
-    sf::RenderTexture& window;
-    sf::RenderWindow& render_window;
     bool show_cursor = false;
     bool reset_cursor_flag = false;
     bool input_active = false;
@@ -100,15 +98,13 @@ class InputComponent : public UIComponent {
     bool text_replica = false;
     bool select_all_on_click = false;
     bool focus_event_else_is_empty = false;
-    size_t normal_s_start = std::string::npos; // normal_s_start is guaranteed <= normal_s_end
+    size_t normal_s_start = std::string::npos; // normal_s_start is guaranteed to be <= normal_s_end
     size_t normal_s_end = std::string::npos;
 
   public:
     // Arguments for constructors
     struct Args {
       struct InputField {
-        sf::RenderTexture& window;
-        sf::RenderWindow& render_window;
         std::string id;
         sf::Vector2f size;
         sf::Vector2f pos;
@@ -121,8 +117,6 @@ class InputComponent : public UIComponent {
       };
 
       struct TextReplica {
-        sf::RenderTexture& window;
-        sf::RenderWindow& render_window;
         std::string id;
         std::shared_ptr<sf::Text> text_reference;
         float font_size;
@@ -133,8 +127,6 @@ class InputComponent : public UIComponent {
     // Input field input component
     InputComponent(MenuData& menu_data, Args::InputField arguments)
       : UIComponent(arguments.id, arguments.hidden),
-        window(arguments.window),
-        render_window(arguments.render_window),
         input_prompt(arguments.prompt),
         corner_radius(arguments.corner_radius),
         input_text(default_font, arguments.prompt, 20),
@@ -194,7 +186,7 @@ class InputComponent : public UIComponent {
             unfocus();
           }
         },
-        input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
+      input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
 
       new_text_event(text_events, id, this, this);
 
@@ -210,8 +202,6 @@ class InputComponent : public UIComponent {
     // Text replica input component
     InputComponent(MenuData& menu_data, Args::TextReplica arguments)
       : UIComponent(arguments.id),
-        window(arguments.window),
-        render_window(arguments.render_window),
         input_prompt(arguments.text_reference->getString().toUtf32()),
         input_text(default_font, arguments.text_reference->getString(), 20),
         select_all_on_click(arguments.select_all_on_click)
@@ -225,7 +215,7 @@ class InputComponent : public UIComponent {
       input_background.setPosition({arguments.text_reference->getPosition().x, arguments.text_reference->getPosition().y - 5.f});
       input_background.setCornerPointCount(main_n);
       input_background.setSize({arguments.text_reference->getGlobalBounds().size.x, arguments.text_reference->getGlobalBounds().size.y + 10.f});
-      update_input_component_size();
+      update_input_component_events();
 
       input_text.setFillColor(text_color);
       setFontSize(input_text, arguments.font_size);
@@ -313,24 +303,24 @@ class InputComponent : public UIComponent {
       }
     }
 
-    void update_input_component_size() {
+    void update_input_component_events() {
       if (text_replica) {
         input_background.setSize({input_text.getGlobalBounds().size.x, input_background.getGlobalBounds().size.y});
-
-        remove_if_event(focus_events, component_id);
-
-        new_focus_event(focus_events, id,
-          [this](MenuData&, sf::Vector2f pos) {
-            if (!is_hidden())
-              focus(pos);
-          },
-          [this](MenuData&) {
-            if (!this->focus_event_else_is_empty) {
-              unfocus();
-            }
-          },
-        input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
       }
+
+      remove_if_event(focus_events, component_id);
+
+      new_focus_event(focus_events, id,
+        [this](MenuData&, sf::Vector2f pos) {
+          if (!is_hidden())
+            focus(pos);
+        },
+        [this](MenuData&) {
+          if (!this->focus_event_else_is_empty) {
+            unfocus();
+          }
+        },
+      input_background.getGlobalBounds(), sf::Mouse::Button::Left, this);
     }
 
     void reset_cursor() {
@@ -410,7 +400,7 @@ class InputComponent : public UIComponent {
       }
 
       update();
-      update_input_component_size();
+      update_input_component_events();
     }
 
     void write(std::u32string input, bool unblock = false) {
@@ -485,7 +475,7 @@ class InputComponent : public UIComponent {
           input_string = input_prompt; // text lookalikes treat deleting the whole string as "canceling", so the string is set to the default
         }
         input_text.setString(input_prompt);
-        update_input_component_size();
+        update_input_component_events();
       }
     }
 
@@ -614,7 +604,6 @@ class InputComponent : public UIComponent {
     void register_action(std::function<void(MenuData&)> action_function) {
       if (action_button) {
         new_click_event(click_events, id + "_action_button", [action_function](MenuData& menu_data) {
-          std::cout << "PRESSED!!" << "\n";
           action_function(menu_data);
         }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
       }

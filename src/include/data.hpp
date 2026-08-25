@@ -284,7 +284,7 @@ struct StaticPlayerData {
 };
 
 struct StaticPlaylistSelectorData {
-  std::shared_ptr<InputComponent> search;
+  InputComponent* search;
   std::vector<std::string> playlists;
   DTCache drawables_cache;
   std::vector<std::unique_ptr<InputComponent>> playlist_names_cache;

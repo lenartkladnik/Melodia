@@ -16,7 +16,7 @@
 
 #include "../external/lib/RoundedRectangleShape.hpp"
 
-std::shared_ptr<StaticPlayerData> init_player(sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data, const std::string& song_path, int id, const std::string& playlist) {
+std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::string& song_path, int id, const std::string& playlist) {
   reset_globals();
 
   auto half = (float)(window_size.x / 2);
@@ -186,8 +186,6 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderTexture& window, sf::Ren
 
 
   auto search = std::make_shared<InputComponent>(menu_data, InputComponent::Args::InputField{
-    .window = window,
-    .render_window = render_window,
     .id = "player_search_input_c",
     .size = sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f},
     .pos = sf::Vector2f{50.f, queue_background.getPosition().y + 10.f},
@@ -324,7 +322,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderTexture& window, sf::Ren
   }, live.getGlobalBounds(), sf::Mouse::Button::Left);
 
   new_click_event(click_events, "playlist_selector", [&](MenuData& menu_data) {
-    switch_to_playlist_selector(menu_data, window, render_window);
+    switch_to_playlist_selector(menu_data);
   }, playlist_selector.getGlobalBounds(), sf::Mouse::Button::Left);
 
   auto data = std::make_shared<StaticPlayerData>();
@@ -375,7 +373,7 @@ std::shared_ptr<StaticPlayerData> init_player(sf::RenderTexture& window, sf::Ren
   return data;
 }
 
-void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf::RenderWindow&) {
+void display_player(MenuData::PlayerData& player) {
   global_z_index = 0;
 
   auto& player_data = *player.data;
@@ -732,7 +730,7 @@ void display_player(MenuData::PlayerData& player, sf::RenderTexture& window, sf:
   draw_window(render_window, window);
 }
 
-void switch_to_player(sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data, std::string playlist) {
+void switch_to_player(MenuData& menu_data, std::string playlist) {
   new_random();
 
   menu_data.data = MenuData::PlayerData();
@@ -747,7 +745,7 @@ void switch_to_player(sf::RenderTexture& window, sf::RenderWindow& render_window
   pd.song_id = get_start_song(pd.queue);
   pd.is_valid = true;
 
-  pd.data = init_player(window, render_window, menu_data, construct_song_path(pd.song_id), pd.song_id, playlist);
+  pd.data = init_player(menu_data, construct_song_path(pd.song_id), pd.song_id, playlist);
 }
 
 void done_playing(std::vector<int>& playlist, std::vector<int>& past) {

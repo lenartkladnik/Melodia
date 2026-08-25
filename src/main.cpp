@@ -73,7 +73,7 @@ int main() {
 
   MenuData menu_data;
 
-  switch_to_playlist_selector(menu_data, window, render_window); // Start as the playlist selector
+  switch_to_playlist_selector(menu_data); // Start as the playlist selector
   // switch_to_player(window, render_window, menu_data, "tmp");
 
   getFontOffsetPixels(small_font_size);
@@ -175,7 +175,7 @@ int main() {
             playlist_sel.data->search->unfocus();
 
             // After the resize all items must be re-rendered
-            switch_to_playlist_selector(menu_data, window, render_window);
+            switch_to_playlist_selector(menu_data);
 
             break;
           }
@@ -413,7 +413,7 @@ int main() {
           player.playing_song_id = player.song_id;
 
           player.music->play();
-          player.data = init_player(window, render_window, menu_data, player.song_path, player.song_id, player.playlist);
+          player.data = init_player(menu_data, player.song_path, player.song_id, player.playlist);
           player.data->cover.setTexture(player.data->cover_texture.get()); // Ensure the cover art texture is set
 
           // Reset state
@@ -454,7 +454,7 @@ int main() {
           player.reset_cursor = true;
         }
 
-        if (player.data) display_player(player, window, render_window);
+        if (player.data) display_player(player);
         else player.playing_song_id = -1; // Something went wrong re-init
 
       break;
@@ -487,7 +487,7 @@ int main() {
 
 
         if (playlist_sel.data) {
-          if (!display_playlist_selector(playlist_sel, window, render_window, menu_data)) break; // false returned when switched to new menu
+          if (!display_playlist_selector(playlist_sel, menu_data)) break; // false returned when switched to new menu
         }
 
       break;

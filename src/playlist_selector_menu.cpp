@@ -16,15 +16,16 @@
 
 #include "../external/lib/RoundedRectangleShape.hpp"
 
-std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data) {
+std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData& menu_data) {
   reset_globals();
 
   auto download_tex = load_texture("download");
 
-  float search_size_x = 600.f;
-  auto search = std::make_shared<InputComponent>(menu_data, InputComponent::Args::InputField{
-    .window = window,
-    .render_window = render_window,
+  const float search_size_x = 600.f;
+
+  // Ensure search is persistent across calls but gets rebuilt each call
+  static std::optional<InputComponent> search;
+  search.emplace(menu_data, InputComponent::Args::InputField{
     .id = "playlist_search_input_c",
     .size = sf::Vector2f{search_size_x, 40.f},
     .pos = sf::Vector2f{window_size.x / 2 - search_size_x / 2, 12.f},
@@ -40,14 +41,14 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(sf::RenderTex
 
 
   auto data = std::make_shared<StaticPlaylistSelectorData>();
-  data->search = search;
+  data->search = &search.value();
   data->playlists = playlists;
   data->drawables_cache = drawables_cache;
   data->search_res_area = nullptr;
   return data;
 }
 
-bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf::RenderTexture& window, sf::RenderWindow& render_window, MenuData& menu_data) {
+bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, MenuData& menu_data) {
   global_z_index = 0;
 
   auto& data = *playlist_sel.data;
@@ -131,8 +132,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           data.playlist_names_cache.resize(i + 1);
 
         data.playlist_names_cache[i] = std::make_unique<InputComponent>(menu_data, InputComponent::Args::TextReplica{
-          .window = window,
-          .render_window = render_window,
           .id = "playlist_name_" + std::to_string(i),
           .text_reference = playlist_name_text_reference,
           .font_size = large_font_size,
@@ -143,8 +142,8 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
       auto& playlist_name = data.playlist_names_cache[i];
       playlist_name->draw();
 
-      new_click_event(click_events, "playlist_play_" + std::to_string(i), [&render_window, &window, i](MenuData& menu_data) {
-        switch_to_player(window, render_window, menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
+      new_click_event(click_events, "playlist_play_" + std::to_string(i), [i](MenuData& menu_data) {
+        switch_to_player(menu_data, std::get<MenuData::PlaylistSelectorData>(menu_data.data).data->playlists[i]);
       }, cover->getGlobalBounds(), sf::Mouse::Button::Left);
 
       if (!pause_main_input_handling) {
@@ -348,7 +347,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
           search_res_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
         );
         new_release_event(search_res_release_events, "search_res_bounds_" + std::to_string(search_res_id),
-          [search_res_id, &window, &render_window, playlist_drop_area_bounds](MenuData& menu_data) {
+          [search_res_id, playlist_drop_area_bounds](MenuData& menu_data) {
             auto data = std::get<MenuData::PlaylistSelectorData>(menu_data.data).data;
 
             if (dragging_search_result == search_res_id) {
@@ -363,14 +362,14 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
 
                 if (background_bounds.contains(dropped_pos)) {
                   add_to_playlist(data->playlists[i], search_res_id);
-                  switch_to_playlist_selector(menu_data, window, render_window);
+                  switch_to_playlist_selector(menu_data);
                   return;
                 }
               }
 
               if (playlist_drop_area_bounds.contains(dropped_pos)) {
                 create_new_playlist(search_res_id);
-                switch_to_playlist_selector(menu_data, window, render_window);
+                switch_to_playlist_selector(menu_data);
                 return;
               }
             }
@@ -443,39 +442,18 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, sf:
     window.draw(pbar_progress_done);
   }
 
-  if (focus_events.size() > 0) {
-    size_t i = 0;
-    bool g = false;
-    for (const auto& e : focus_events) {
-      if (e.id == "playlist_search_input_c") {
-        g = true;
-        break;
-      }
-      i++;
-    }
-
-    if (g) {
-      std::cout << focus_events[i].bounds.size.x << ", " << focus_events[i].bounds.size.y << "; " << focus_events[i].bounds.position.x << ", " << focus_events[i].bounds.position.y << "\n";
-      // debug_draw_bounds(window, focus_events[i].bounds);
-    } else {
-      std::cout << "no event " << "playlist_search_input_c" << "\n";
-    }
-  } else {
-    std::cout << "no events\n";
-  }
-
   draw_window(render_window, window);
 
   return true;
 }
 
-void switch_to_playlist_selector(MenuData& menu_data, sf::RenderTexture& window, sf::RenderWindow& render_window) {
+void switch_to_playlist_selector(MenuData& menu_data) {
   menu_data.data = MenuData::PlaylistSelectorData();
   menu_data.type = MenuData::PlaylistSelector;
 
   input_max_char = playlist_search_max_char;
 
-  std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(window, render_window, menu_data);
+  std::get<MenuData::PlaylistSelector>(menu_data.data).data = init_playlist_selector(menu_data);
   std::get<MenuData::PlaylistSelector>(menu_data.data).is_valid = true;
 
   if (!std::get<MenuData::PlaylistSelectorData>(menu_data.data).is_valid || !std::holds_alternative<MenuData::PlaylistSelectorData>(menu_data.data)) {

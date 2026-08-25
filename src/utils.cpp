@@ -488,7 +488,7 @@ void setFontSize(sf::Text& text, float target_size, unsigned int raster_mul) {
 
 void reset_globals() {
   // All of the std::vector objects that get cleared here contain
-  // some pointers to objects in memory that have changed
+  // some pointers to objects in memory that might have changed
 
   search_res_click_events.clear();
   search_results.clear();
