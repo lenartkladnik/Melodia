@@ -109,7 +109,7 @@ bool _resize_cover_art(const std::string& temp_file_path, const std::string& out
   return true;
 }
 
-// urlencode - Source:
+// urlencode and hexchar - Source:
 // https://gist.github.com/litefeel/1197e5c24eb9ec93d771
 
 void hexchar(unsigned char c, unsigned char &hex1, unsigned char &hex2) {
@@ -125,11 +125,20 @@ std::string urlencode(const std::u32string& s) {
   v.clear();
   for (size_t i = 0, l = s.size(); i < l; i++) {
     auto c = str[i];
-    if ((c >= '0' && c <= '9') ||
+    if (
+      (c >= '0' && c <= '9') ||
       (c >= 'a' && c <= 'z') ||
       (c >= 'A' && c <= 'Z') ||
-      c == '-' || c == '_' || c == '.' || c == '!' || c == '~' ||
-      c == '*' || c == '\'' || c == '(' || c == ')') {
+      c == '-'  ||
+      c == '_'  ||
+      c == '.'  ||
+      c == '!'  ||
+      c == '~'  ||
+      c == '*'  ||
+      c == '\'' ||
+      c == '('  ||
+      c == ')'
+    ) {
       v.push_back(c);
     }
     else if (c == ' ') {
@@ -146,8 +155,6 @@ std::string urlencode(const std::u32string& s) {
 
   return std::string(v.cbegin(), v.cend());
 }
-
-// =====================================================
 
 bool _download_cover_art(int new_id) {
   progress_bar_doing_string = "Downloading cover art";
@@ -249,7 +256,7 @@ bool _download_cover_art(int new_id) {
   return true;
 }
 
-bool _download_song_from_query(const std::u32string& query) {
+bool _download_song_from_query(const std::u32string& query, size_t new_id) {
   if (pause_main_input_handling) return false; // Exit if a download is ongoing
 
   pause_main_input_handling = true;
@@ -257,7 +264,7 @@ bool _download_song_from_query(const std::u32string& query) {
   // Set progress bar
   progress_bar_string = "Downloading...";
   progress_bar_amount = 1.f;
-  progress_bar_total = 12.f; // 1 in _download_song_from_query (check if yt-dlp exists and download if it doesn't)
+  progress_bar_total = 11.f; // 1 in _download_song_from_query (check if yt-dlp exists and download if it doesn't)
                              // 3 in download_song_from_query
                              // |-> 3 in _download_cover_art
                              //     |-> 2 in _resize_cover_art (normal)
@@ -278,6 +285,8 @@ bool _download_song_from_query(const std::u32string& query) {
     ) == 0) {
     std::cout << "Info: yt-dlp was not found on the system and will be downloaded.\n";
 
+    progress_bar_doing_string = "Downloading yt-dlp";
+
     yt_dlp_path = get_yt_dlp_downloaded_path();
     if (!_download_file(get_yt_dlp_download_url(), yt_dlp_path)) {
       throw std::runtime_error("Failed to download the yt-dlp binary form '" + yt_dlp_path + "'. Consider installing yt-dlp yourself systemwide.");
@@ -289,21 +298,6 @@ bool _download_song_from_query(const std::u32string& query) {
   }
 
   std::cout << "Info: Attempting to download song from query '" << u32_to_utf8(query) << "'.\n";
-
-  progress_bar_doing_string = "Getting the max id";
-
-  int max_id = -1;
-
-  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_data)) {
-    int id = std::stoi(entry.path().stem().string());
-
-    if (id > max_id)
-      max_id = id;
-  }
-
-  auto new_id = max_id + 1;
-
-  progress_bar_amount += 1.f; // Done with getting the max_id
 
   progress_bar_doing_string = "Downloading song file and metadata";
   if (!_yt_dlp_download_song_from_query(yt_dlp_path, new_id, query)) return false;
@@ -326,10 +320,19 @@ void download_from_search(InputComponent* component) {
 
   if (query.empty()) return; // Don't download without query
 
+  auto new_id = get_next_avaliable_song_id();
+
   download_song_thread = std::unique_ptr<std::thread>(new std::thread(
     [=](){
-      int code = _download_song_from_query(query);
-      std::cout << code << "\n";
+      bool success = _download_song_from_query(query, new_id);
+      if (!success) {
+        remove_song(std::to_string(new_id));
+
+        // Reset progress bar
+        progress_bar_amount = progress_bar_total;
+        progress_bar_doing_string = "";
+        progress_bar_string = "";
+      }
 
       pause_main_input_handling = false;
 

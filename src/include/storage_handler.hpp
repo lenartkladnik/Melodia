@@ -13,6 +13,8 @@ extern const std::string path_counter_prefix;
 
 bool ensure_storage();
 void remove_playlist(std::string playlist);
+void remove_song(std::string id);
+size_t get_next_avaliable_song_id();
 std::string create_new_playlist(int song_id);
 std::string rename_playlist(std::string old_playlist, std::string new_playlist);
 void add_to_playlist(std::string playlist, int song_id);

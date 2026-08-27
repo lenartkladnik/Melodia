@@ -37,11 +37,36 @@ bool ensure_storage() {
 }
 
 void remove_playlist(std::string playlist) {
+  // Try to remove all items that make up a playlist
   auto playlist_path = base_music_path_playlists + playlist;
-  if (std::filesystem::exists(playlist_path))
+  try {
     std::filesystem::remove(playlist_path);
-  if (std::filesystem::exists(playlist_path + ".png"))
     std::filesystem::remove(playlist_path + ".png");
+  } catch (...) {}
+}
+
+void remove_song(std::string id) {
+  // Try to remove all items which make up a song
+  std::vector<std::string> items = {"title", "artist", "mp3", "png", "small.png"};
+  for (const auto& item : items) {
+    try {
+      std::filesystem::remove(id + "." + item);
+    } catch (...) {}
+  }
+}
+
+size_t get_next_avaliable_song_id() {
+  int max_id = -1;
+
+  for (const auto& entry : std::filesystem::directory_iterator(base_music_path_data)) {
+    int id = std::stoi(entry.path().stem().string());
+
+    if (id > max_id)
+      max_id = id;
+  }
+
+  size_t new_id = max_id + 1;
+  return new_id;
 }
 
 std::string create_new_playlist(int song_id) {

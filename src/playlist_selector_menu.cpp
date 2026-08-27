@@ -412,7 +412,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
   // Progress bar for downloading
   if (!progress_bar_string.empty()) {
     sf::RoundedRectangleShape pbar_background({550.f, 150.f}, 8, main_n);
-    pbar_background.setFillColor(background_color);
+    pbar_background.setFillColor(light_background_color);
     pbar_background.setPosition({
       (window_size.x / 2) - (pbar_background.getGlobalBounds().size.x / 2),
       (window_size.y / 2) - (pbar_background.getGlobalBounds().size.y / 2)
