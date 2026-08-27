@@ -5,6 +5,16 @@
 #include <string>
 
 void debug_draw_bounds(sf::RenderTexture& window, sf::FloatRect bounds);
+template<typename TIterable>
+void debug_print_iterable(TIterable& iterable, std::string sep = ", ") {
+  std::cout << "{";
+  for (const auto& i : iterable) {
+    std::cout << i << sep;
+  }
+  std::cout << "\x1b[" + std::to_string(sep.size()) + "D";
+  std::cout << "}";
+}
+
 
 void set_window(sf::State state);
 void draw_window(sf::RenderWindow& render_window, sf::RenderTexture& window);

@@ -21,6 +21,7 @@
 bool dark_mode = true;
 
 const int ON_TOP = 999;
+extern const size_t MAX_PAST_QUEUE_SIZE = 999;
 
 const float padding_top = 100.f;
 const float offset = 50.f;

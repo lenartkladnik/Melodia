@@ -200,6 +200,9 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();
   }, main_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
+  // When the play toggle keybind (default space) is pressed toggle the play state of music
+  play_toggle_signal.connect("toggle_play_state", [&menu_data](){std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();});
+
   new_click_event(click_events, "next_control", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
@@ -210,15 +213,12 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
   new_click_event(click_events, "previous_control", [](MenuData& menu_data) {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
-    auto old_id = player.song_id;
     if (player.past_queue.size() > 1) {
-      auto idx = player.past_queue.size() - 2;
+      player.song_id = player.past_queue[player.past_queue.size() - 2];
 
-      player.song_id = player.past_queue[idx];
-      player.past_queue.erase(player.past_queue.begin() + idx);
-
-      player.queue.erase(std::find(player.queue.begin(), player.queue.end(), old_id));
-      player.queue.insert(player.queue.begin(), old_id);
+      player.past_queue.erase(player.past_queue.end());
+    } else {
+      std::cout << "[INFO] Previous control clicked, but there is no past queue.\n";
     }
   }, previous_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
@@ -743,17 +743,21 @@ void switch_to_player(MenuData& menu_data, std::string playlist) {
   pd.playlist = playlist;
   pd.queue = get_playlist(pd.playlist);
   pd.song_id = get_start_song(pd.queue);
+  pd.past_queue.push_back(pd.song_id);
   pd.is_valid = true;
 
   pd.data = init_player(menu_data, construct_song_path(pd.song_id), pd.song_id, playlist);
 }
 
-void done_playing(std::vector<int>& playlist, std::vector<int>& past) {
-  // pop the first element into id
+void done_playing(std::vector<int>& playlist, std::vector<int>& past_queue) {
   int id = playlist[0];
 
-  past.push_back(id);
-  if (past.size() > queue_items) past.erase(past.begin());
+  std::cout << "[INFO] Now playing '" << id << "'.\n";
+
+  past_queue.push_back(id);
+  if (past_queue.size() > MAX_PAST_QUEUE_SIZE) {
+    past_queue.erase(past_queue.begin());
+  }
 
   playlist.erase(playlist.begin());
 

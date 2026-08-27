@@ -24,6 +24,7 @@ class AreaComponent;
 extern bool dark_mode;
 
 extern const int ON_TOP; // Maximum z-index that is assumed to be on the top of everything else
+extern const size_t MAX_PAST_QUEUE_SIZE;
 
 extern const float padding_top;
 extern const float offset;
