@@ -13,6 +13,7 @@
 #include "include/events.hpp"
 #include "include/storage_handler.hpp"
 #include "include/signals.hpp"
+#include "include/scheduler.hpp"
 
 using namespace sf;
 
@@ -130,6 +131,11 @@ int main() {
   };
 
   while (render_window.isOpen()) {
+    for (auto& task : tasks) {
+      task.tick(menu_data);
+    }
+    remove_done_tasks();
+
     while (const std::optional event = render_window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
         render_window.close();

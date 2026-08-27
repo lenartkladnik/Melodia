@@ -23,7 +23,13 @@ class Signal {
     }
 
     void emit() {
-      for (const auto& [_, callback] : callbacks) {
+      // Create a snapshot since a callback could call disconnect
+      // which would call erase and invalidate the iterator
+      std::vector<std::function<void()>> callback_funcs;
+      callback_funcs.reserve(callbacks.size());
+      for (const auto& [_, func] : callbacks) {callback_funcs.push_back(func);};
+
+      for (const auto& callback : callback_funcs) {
         callback();
       }
     }

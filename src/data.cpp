@@ -146,26 +146,38 @@ std::random_device rd;
 std::mt19937 rand_generator(rd());
 
 void set_colors() {
+  white_color = adjust_if_dark_mode({212, 212, 212});
   main_color = adjust_if_dark_mode({232, 224, 209});
   dark_main_color = add_int_to_color(main_color, -5);
+
   background_color = adjust_if_dark_mode({227, 219, 211});
   dark_background_color = add_int_to_color(background_color, -5);
   light_background_color = adjust_if_dark_mode({217, 211, 200});
   lighter_background_color = adjust_if_dark_mode({0, 0, 0, 5});
-  background_shadow_color = add_int_to_color(background_color, -20);
+
+  background_shadow_color = add_int_to_color(background_color, -10);
   dark_background_shadow_color = add_int_to_color(dark_background_color, -10);
   background_shadow_color_transparent = sf::Color({background_shadow_color.r, background_shadow_color.g, background_shadow_color.b, 128});
   dark_background_shadow_color_transparent = sf::Color({dark_background_shadow_color.r, dark_background_shadow_color.g, dark_background_shadow_color.b, 128});
+
   progress_color = adjust_if_dark_mode({180, 180, 180});
   progress_done_color = adjust_if_dark_mode({32, 32, 32});
+
   text_color = adjust_if_dark_mode({10, 10, 10});
   cursor_color = adjust_if_dark_mode({40, 40, 40});
   light_text_color = adjust_if_dark_mode({80, 80, 80});
   lighter_text_color = adjust_if_dark_mode({120, 120, 120});
-  white_color = adjust_if_dark_mode({212, 212, 212});
+
   title_color = text_color;
   artist_color = light_text_color;
-  selection_color = adjust_if_dark_mode({181, 215, 255});
+
+  if (dark_mode) {
+    selection_color = {74, 121, 176};
+  } else {
+    selection_color = {181, 215, 255};
+  }
+
   cancel_area_color = adjust_if_dark_mode({255, 0, 0, 20});
+
   volume_slider_color = adjust_if_dark_mode({10, 10, 10});
 }

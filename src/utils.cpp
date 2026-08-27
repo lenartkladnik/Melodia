@@ -213,13 +213,23 @@ std::shared_ptr<sf::Texture> load_texture(std::string name, bool no_invert) {
   return tex;
 }
 
-// Adapted from: https://en.cppreference.com/cpp/string/byte/isalnum
 bool is_string_valid_name(const std::string& s) {
   if (s.empty()) return false;
 
-  return std::count_if(s.begin(), s.end(),
-    [](unsigned char c){ return !(std::isalnum(c) || c == ' ' || c == '_') ;}
-  ) == 0;
+  // Invalid character list from: https://stackoverflow.com/questions/4814040/allowed-characters-in-filename
+  return std::count_if(s.begin(), s.end(), [](unsigned char c){ return (
+    c == '\0' ||
+    c == '\\' ||
+    c == '/'  ||
+    c == ':'  ||
+    c == '*'  ||
+    c == '?'  ||
+    c == '"'  ||
+    c == '<'  ||
+    c == '>'  ||
+    c == '|'  ||
+    c == '.'
+  );}) == 0;
 }
 
 void mkdir(std::string path) {

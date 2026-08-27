@@ -28,6 +28,7 @@
 ## code
 
 ### coding style
+- remove all unused params (signature like ```void f(T);```)
 - use m_ prefix for member variables
 - use hover_event(s) to apply hover changes
 - move constructors and deconstructors to the top of class definitions
@@ -44,6 +45,9 @@
 - force resize aspect ratio
 
 ## input
+
+### utf
+- Support utf32 in playlist names
 
 ### string
 - scroll when the string is longer than what can be displayed
@@ -102,6 +106,7 @@
 
 ## building
 - add BUILDING.md
+- build process for all architectures
 - dependency list for building all
   - scons
   - gcc

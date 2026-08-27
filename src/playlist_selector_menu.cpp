@@ -13,6 +13,7 @@
 #include "include/utils.hpp"
 #include "include/song_containers.hpp"
 #include "include/storage_handler.hpp"
+#include "include/scheduler.hpp"
 
 #include "../external/lib/RoundedRectangleShape.hpp"
 
@@ -131,11 +132,19 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
         if (data.playlist_names_cache.size() <= i)
           data.playlist_names_cache.resize(i + 1);
 
+        auto playlist_name_str = data.playlists[i];
         data.playlist_names_cache[i] = std::make_unique<InputComponent>(menu_data, InputComponent::Args::TextReplica{
           .id = "playlist_name_" + std::to_string(i),
           .text_reference = playlist_name_text_reference,
           .font_size = large_font_size,
-          .select_all_on_click = true
+          .select_all_on_click = true,
+          .action_function = [playlist_name_str, &menu_data](InputComponent* component){
+            // TODO: Support utf32 in playlist names
+            auto utf8_new_name = sf::String(component->get_input_string()).toUtf8();
+            std::string new_name = std::string(reinterpret_cast<const char*>(utf8_new_name.data()), utf8_new_name.size());
+            rename_playlist(playlist_name_str, new_name);
+            on_next_frame(switch_to_playlist_selector); // Refresh on next frame (to not invalidate the iterator for signals)
+          }
         });
       }
 

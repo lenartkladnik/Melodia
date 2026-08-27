@@ -2,7 +2,8 @@
 #define DOWNLOAD_HPP
 
 #include "data.hpp"
+#include "components.hpp"
 
-bool download_from_search(MenuData& menu_data);
+bool download_from_search(InputComponent*);
 
 #endif

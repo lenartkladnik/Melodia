@@ -34,6 +34,7 @@ sources = [
     "src/signals.cpp",
     "src/components.cpp",
     "src/events.cpp",
+    "src/scheduler.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]
 sources += glob.glob("external/lib/SFC/*.cpp")

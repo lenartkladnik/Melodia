@@ -89,7 +89,7 @@ class InputComponent : public UIComponent {
     sf::Text input_text;
     std::shared_ptr<sf::Texture> action_button_tex;
     std::optional<sf::Sprite> action_button;
-    std::function<void(MenuData&)> action_function;
+    std::function<void(InputComponent*)> action_function;
     size_t selection_start = std::string::npos;
     size_t selection_end = std::string::npos;
     bool selecting = false;
@@ -110,7 +110,7 @@ class InputComponent : public UIComponent {
         sf::Vector2f pos;
         std::u32string prompt = U"";
         std::shared_ptr<sf::Texture> action_tex = nullptr;
-        std::function<void(MenuData&)> action_function = [](MenuData&){};
+        std::function<void(InputComponent*)> action_function = [](InputComponent*){};
         float corner_radius = 20;
         bool hidden = false;
         bool no_focus_event_else = false;
@@ -121,18 +121,19 @@ class InputComponent : public UIComponent {
         std::shared_ptr<sf::Text> text_reference;
         float font_size;
         bool select_all_on_click = false;
+        std::shared_ptr<sf::Texture> action_tex = nullptr;
+        std::function<void(InputComponent*)> action_function = [](InputComponent*){};
       };
     };
 
     // Input field input component
-    InputComponent(MenuData& menu_data, Args::InputField arguments)
+    InputComponent(MenuData&, Args::InputField arguments)
       : UIComponent(arguments.id, arguments.hidden),
         input_prompt(arguments.prompt),
         corner_radius(arguments.corner_radius),
         input_text(default_font, arguments.prompt, 20),
         action_function(arguments.action_function),
         focus_event_else_is_empty(arguments.no_focus_event_else)
-
     {
       component_id = arguments.id;
 
@@ -196,18 +197,24 @@ class InputComponent : public UIComponent {
         },
         sf::Mouse::Button::Left, this);
 
-      connect_signals(menu_data);
+      connect_signals();
     }
 
     // Text replica input component
-    InputComponent(MenuData& menu_data, Args::TextReplica arguments)
+    InputComponent(MenuData&, Args::TextReplica arguments)
       : UIComponent(arguments.id),
         input_prompt(arguments.text_reference->getString().toUtf32()),
         input_text(default_font, arguments.text_reference->getString(), 20),
+        action_function(arguments.action_function),
         select_all_on_click(arguments.select_all_on_click)
     {
       component_id = arguments.id;
       text_replica = true;
+
+      if (arguments.action_tex) {
+        action_button_tex = arguments.action_tex;
+        action_button.emplace(*action_button_tex);
+      }
 
       input_string = arguments.text_reference->getString().toUtf32();
       cursor_pos = 0;
@@ -225,6 +232,15 @@ class InputComponent : public UIComponent {
       selection_background.setCornerPointCount(main_n);
       selection_background.setCornersRadius(4);
 
+      if (action_button) {
+        action_button->setPosition({
+          input_background.getPosition().x + input_background.getGlobalBounds().size.x - action_button->getGlobalBounds().size.x - 12.f,
+          input_background.getPosition().y + 5.f
+        });
+
+        register_action(arguments.action_function);
+      }
+
       new_text_event(text_events, id, this, this);
 
       new_release_event(release_events, id,
@@ -233,7 +249,7 @@ class InputComponent : public UIComponent {
         },
       sf::Mouse::Button::Left, this);
 
-      connect_signals(menu_data);
+      connect_signals();
     }
 
     InputComponent() = delete;
@@ -254,15 +270,13 @@ class InputComponent : public UIComponent {
     InputComponent(InputComponent&&) = delete;
     InputComponent& operator=(InputComponent&&) = delete;
 
-    void connect_signals(MenuData& menu_data) {
-      MenuData* menu_data_ptr = &menu_data;
-
+    void connect_signals() {
       copy_signal.connect(component_id, [this](){ if (this->m_focused) this->copy(); });
       paste_signal.connect(component_id, [this](){ if (this->m_focused) this->paste(); });
       select_all_signal.connect(component_id, [this](){ if (this->m_focused) this->select_all(); });
       left_signal.connect(component_id, [this](){ if (this->m_focused) this->move_cursor(-1); });
       right_signal.connect(component_id, [this](){ if (this->m_focused) this->move_cursor(1); });
-      confirm_signal.connect(component_id, [this, menu_data_ptr](){ if (this->m_focused && this->action_function) this->action_function(*menu_data_ptr); });
+      confirm_signal.connect(component_id, [this](){ if (this->m_focused && this->action_function) this->action_function(this); });
       escape_signal.connect(component_id, [this](){ if (this->m_focused) this->unfocus(); });
     }
 
@@ -471,11 +485,14 @@ class InputComponent : public UIComponent {
       if (input_string.size() == 0) {
         if (!text_replica) {
           input_text.setFillColor(light_text_color);
-        } else {
-          input_string = input_prompt; // text lookalikes treat deleting the whole string as "canceling", so the string is set to the default
         }
         input_text.setString(input_prompt);
         update_input_component_events();
+      }
+
+      if (text_replica) {
+        input_string = input_prompt; // text lookalikes treat deselecting as canceling edit
+        input_text.setString(input_string);
       }
     }
 
@@ -601,10 +618,10 @@ class InputComponent : public UIComponent {
       return dummy_rect;
     }
 
-    void register_action(std::function<void(MenuData&)> action_function) {
+    void register_action(std::function<void(InputComponent*)> action_function) {
       if (action_button) {
-        new_click_event(click_events, id + "_action_button", [action_function](MenuData& menu_data) {
-          action_function(menu_data);
+        new_click_event(click_events, id + "_action_button", [action_function, this](MenuData&) {
+          action_function(this);
         }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
       }
     }

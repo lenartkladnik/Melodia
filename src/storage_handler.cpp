@@ -58,12 +58,19 @@ std::string create_new_playlist(int song_id) {
   return playlist_stem;
 }
 
+// TODO: Support utf32 in playlist names
 std::string rename_playlist(std::string old_playlist, std::string new_playlist) {
-  if (!is_string_valid_name(new_playlist))
-    throw std::runtime_error("Playlist name contains invalid characters");
+  if (old_playlist == new_playlist)
+    return new_playlist; // Already correct name
+
+  if (!is_string_valid_name(new_playlist)) {
+    std::cout << "[ERROR] Failed to rename playlist: Playlist name ('" << new_playlist << "') contains invalid characters.\n";
+    return old_playlist;
+  }
 
   auto new_playlist_path = get_next_available_path(base_music_path_playlists + new_playlist);
   std::filesystem::rename(base_music_path_playlists + old_playlist, new_playlist_path);
+  std::filesystem::rename(base_music_path_playlists + old_playlist + ".png", new_playlist_path + ".png");
 
   return get_stem(new_playlist_path);
 }

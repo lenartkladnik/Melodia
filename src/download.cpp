@@ -254,6 +254,17 @@ bool _download_song_from_query(const std::u32string& query) {
 
   pause_main_input_handling = true;
 
+  // Set progress bar
+  progress_bar_string = "Downloading...";
+  progress_bar_amount = 1.f;
+  progress_bar_total = 12.f; // 1 in _download_song_from_query (check if yt-dlp exists and download if it doesn't)
+                             // 3 in download_song_from_query
+                             // |-> 3 in _download_cover_art
+                             //     |-> 2 in _resize_cover_art (normal)
+                             //     |-> 2 in _resize_cover_art (small)
+
+  progress_bar_doing_string = "Finding yt-dlp";
+
   std::cout << "Info: Checking if yt-dlp already exists on the system\n";
 
   std::string yt_dlp_path = "yt-dlp";
@@ -278,14 +289,6 @@ bool _download_song_from_query(const std::u32string& query) {
   }
 
   std::cout << "Info: Attempting to download song from query '" << u32_to_utf8(query) << "'.\n";
-
-  // Set progress bar
-  progress_bar_string = "Downloading...";
-  progress_bar_amount = 0.f;
-  progress_bar_total = 10.f; // 3 in download_song_from_query
-                             // |-> 3 in _download_cover_art
-                             //     |-> 2 in _resize_cover_art (normal)
-                             //     |-> 2 in _resize_cover_art (small)
 
   progress_bar_doing_string = "Getting the max id";
 
@@ -318,9 +321,8 @@ bool _download_song_from_query(const std::u32string& query) {
   return true;
 }
 
-void download_from_search(MenuData& menu_data) {
-  auto& playlist_sel = std::get<MenuData::PlaylistSelector>(menu_data.data);
-  auto query = playlist_sel.data->search->get_input_string();
+void download_from_search(InputComponent* component) {
+  auto query = component->get_input_string();
 
   if (query.empty()) return; // Don't download without query
 
@@ -331,7 +333,7 @@ void download_from_search(MenuData& menu_data) {
 
       pause_main_input_handling = false;
 
-      playlist_sel.data->search->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
+      component->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
     }
   ));
 }
