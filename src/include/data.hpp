@@ -25,6 +25,7 @@ extern bool dark_mode;
 
 extern const int ON_TOP; // Maximum z-index that is assumed to be on the top of everything else
 extern const size_t MAX_PAST_QUEUE_SIZE;
+extern const size_t NO_REPEAT_ZONE; // An song won't repeat for at least this many songs (if the number of songs is more than it)
 
 extern const float padding_top;
 extern const float offset;

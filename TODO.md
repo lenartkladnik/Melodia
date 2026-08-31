@@ -87,6 +87,7 @@
 
 ## queue
 - ~scrolling in the queue~
+- separate the songs in the playlist into the ones the user added to the queue and random shuffle / rest of playlist
 - scrolling when dragging in the queue
 - shuffle toggle button
 - allow reordering of songs (in the playlist file as well) - only when shuffle is off

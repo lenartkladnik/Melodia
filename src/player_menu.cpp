@@ -761,12 +761,12 @@ void done_playing(std::vector<int>& playlist, std::vector<int>& past_queue) {
 
   playlist.erase(playlist.begin());
 
-  if (playlist.size() <= queue_items) {
+  if (playlist.size() <= NO_REPEAT_ZONE) {
     playlist.push_back(id);
   }
   else {
-    std::uniform_int_distribution<> distr(1, playlist.size() - queue_items - 1);
-    playlist.insert(playlist.begin() + queue_items + distr(rand_generator), id); // Add queue_items to prevent the user from seeing the insertion
+    std::uniform_int_distribution<> distr(NO_REPEAT_ZONE, playlist.size() - queue_items - 1);
+    playlist.insert(playlist.begin() + NO_REPEAT_ZONE + distr(rand_generator), id);
   }
 }
 
