@@ -14,6 +14,7 @@
 #include "include/storage_handler.hpp"
 #include "include/signals.hpp"
 #include "include/scheduler.hpp"
+#include "include/playlist_scraper.hpp"
 
 using namespace sf;
 

@@ -556,3 +556,13 @@ bool color_less_than_color(sf::Color a, sf::Color b) {
 bool is_color_black(sf::Color a) {
   return color_less_than_color(a, sf::Color{black_threshold, black_threshold, black_threshold});
 }
+
+std::string escape_csv(const std::string& s) {
+  std::string result = s;
+  size_t pos = 0;
+  while ((pos = result.find('"', pos)) != std::string::npos) {
+    result.replace(pos, 1, "\"\"");
+    pos += 2;
+  }
+  return result;
+}

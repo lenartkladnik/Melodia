@@ -48,6 +48,7 @@ float dot_colors(sf::Color a, float wr, float wg, float wb);
 sf::Color adjust_if_dark_mode(sf::Color a);
 bool color_less_than_color(sf::Color a, sf::Color b);
 bool is_color_black(sf::Color a);
+std::string escape_csv(const std::string& s);
 
 template<typename TShape>
 void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {

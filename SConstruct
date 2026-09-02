@@ -35,6 +35,7 @@ sources = [
     "src/components.cpp",
     "src/events.cpp",
     "src/scheduler.cpp",
+    "src/playlist_scraper.cpp",
     "external/lib/RoundedRectangleShape.cpp"
 ]
 sources += glob.glob("external/lib/SFC/*.cpp")
@@ -262,7 +263,7 @@ if target in ("all", "linux"):
 
     env = base.Clone()
 
-    env.ParseConfig("pkg-config --cflags --libs sfml-graphics sfml-audio")
+    env.ParseConfig("pkg-config --cflags --libs sfml-graphics sfml-audio gtk+-3.0 webkit2gtk-4.1")
 
     prog = build_target(env, "linux")
     targets.append(prog)
@@ -446,6 +447,9 @@ if target in ("all", "macos"):
             "sfml-audio",
             "sfml-window",
             "sfml-system",
+        ],
+        CXXFLAGS=[
+            "-x", "objective-c++"  # Tells Clang to parse .cpp files as Objective-C++ (required for some MacOS specific things)
         ],
     )
 
