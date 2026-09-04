@@ -577,7 +577,7 @@ void display_player(MenuData::PlayerData& player) {
         title_string += U"...";
       }
 
-      if (search_active && !matching(player_data.search->get_input_string(), artist_string, match_diff) && !matching(player_data.search->get_input_string(), title_string, match_diff)) continue; // Skip because it's not a match
+      if (search_active && !matching_song(player_data.search->get_input_string(), title_string, artist_string, match_diff)) continue; // Skip because it's not a match
 
       queue_title.setString(title_string);
       queue_title.setPosition({queue_cover.getPosition().x + queue_cover.getGlobalBounds().size.x + 5.f, queue_cover.getPosition().y + queue_cover_size / 3 - 10.f});

@@ -213,18 +213,9 @@ std::vector<int> search_all_songs(const std::u32string& query) {
       }
 
       if (id >= 0) {
-        float title_score = matching(query, get_song_title(id), match_diff);
-
-        if (title_score == 1.f) { // Check if the title matches first since the user is more likely to search by title
-          scored_results.emplace_back(title_score, id);
-          continue; // Skip artist check
-        }
-
-        float artist_score = matching(query, get_song_artist(id), match_diff);
-
-        float best_score = std::max(title_score, artist_score);
-        if (best_score > 0.f)
-          scored_results.emplace_back(best_score, id);
+        float score = matching_song(query, get_song_title(id), get_song_artist(id), match_diff);
+        if (score > 0.f)
+          scored_results.emplace_back(score, id);
       }
     }
   }

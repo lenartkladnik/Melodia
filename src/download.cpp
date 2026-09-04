@@ -322,21 +322,23 @@ void download_from_search(InputComponent* component) {
 
   auto new_id = get_next_avaliable_song_id();
 
-  download_song_thread = std::unique_ptr<std::thread>(new std::thread(
-    [=](){
-      bool success = _download_song_from_query(query, new_id);
-      if (!success) {
-        remove_song(std::to_string(new_id));
+  std::thread download_song_thread([=](){
+    bool success = _download_song_from_query(query, new_id);
+    if (!success) {
+      std::cout << "Failed to download song.\n";
 
-        // Reset progress bar
-        progress_bar_amount = progress_bar_total;
-        progress_bar_doing_string = "";
-        progress_bar_string = "";
-      }
+      remove_song(std::to_string(new_id));
 
-      pause_main_input_handling = false;
-
-      component->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
+      // Reset progress bar
+      progress_bar_amount = progress_bar_total;
+      progress_bar_doing_string = "";
+      progress_bar_string = "";
     }
-  ));
+
+    pause_main_input_handling = false;
+
+    if (success)
+      component->force_input_refresh(); // Reset the search (so the new downloaded song is shown)
+  });
+  download_song_thread.detach();
 }

@@ -416,6 +416,57 @@ int LevenshteinDistance(std::u32string word1, std::u32string word2) {
   return verif[size1][size2];
 }
 
+// From: https://stackoverflow.com/a/43914385
+int OptimalStringAlignmentDistance(std::u32string p_string1, std::u32string p_string2) {
+    int l_string_length1 = p_string1.length();
+    int l_string_length2 = p_string2.length();
+    int d[l_string_length1+1][l_string_length2+1];
+
+    int i;
+    int j;
+    int l_cost;
+
+    for (i = 0;i <= l_string_length1;i++)
+    {
+        d[i][0] = i;
+    }
+    for(j = 0; j<= l_string_length2; j++)
+    {
+        d[0][j] = j;
+    }
+    for (i = 1;i <= l_string_length1;i++)
+    {
+        for(j = 1; j<= l_string_length2; j++)
+        {
+            if( p_string1[i-1] == p_string2[j-1] )
+            {
+                l_cost = 0;
+            }
+            else
+            {
+                l_cost = 1;
+            }
+            d[i][j] = std::min(
+            d[i-1][j] + 1,                  // delete
+            std::min(d[i][j-1] + 1,         // insert
+            d[i-1][j-1] + l_cost)           // substitution
+            );
+            if( (i > 1) && 
+            (j > 1) && 
+            (p_string1[i-1] == p_string2[j-2]) && 
+            (p_string1[i-2] == p_string2[j-1])
+            ) 
+            {
+            d[i][j] = std::min(
+            d[i][j],
+             d[i-2][j-2] + l_cost   // transposition
+            );
+            }
+        }
+    }
+    return d[l_string_length1][l_string_length2];
+ }
+
 float strings_match(std::u32string s1, std::u32string s2, int threshold) {
   std::transform(s1.begin(), s1.end(), s1.begin(), to_lower_u32);
   std::transform(s2.begin(), s2.end(), s2.begin(), to_lower_u32);
@@ -423,9 +474,9 @@ float strings_match(std::u32string s1, std::u32string s2, int threshold) {
   if (isSubstring(s1, s2))
     return 1.f;
 
-  auto dist = std::min(LevenshteinDistance(s1, s2), LevenshteinDistance(s2, s1));
+  auto dist = std::min(OptimalStringAlignmentDistance(s1, s2), OptimalStringAlignmentDistance(s2, s1));
   if (dist <= threshold)
-    return 1.f - dist / threshold; // The score is based on the distance - smaller distance = smaller the score
+    return 1.f - dist / threshold; // The score is based on the distance -> smaller distance = smaller the score
 
   return 0.f;
 }
@@ -442,22 +493,54 @@ float chunks_match(const std::u32string& full_string, const std::u32string& smal
   return 0.f;
 }
 
-float matching(std::u32string s1, std::u32string s2, size_t threshold) {
+float matching_song(std::u32string query, std::u32string song_title, std::u32string song_artist, size_t threshold) {
   // matching returns a score out of 1 of how good the match is 0 being the worst and 1 being the best
 
-  return strings_match(s1, s2, threshold);
+  auto query_split = split_u32(query, U' ');
+  auto artist_split = split_u32(song_artist, U' ');
+  auto title_split = split_u32(song_title, U' ');
 
-  // if (s1.length() < s2.length()) {
-  //   if (s1.length() > threshold * 1.2) {
-  //     return chunks_match(s2, s1, (int)(s1.length() / 2));
-  //   }
-  // } else {
-  //   if (s2.length() > threshold * 1.2) {
-  //     return chunks_match(s1, s2, (int)(s1.length() / 2));
-  //   }
-  // }
+  const float penalty = 1.f;
 
-  // return false;
+  float score = 0.f;
+  float temporary_best_score = 0.f;
+
+  // Check each word in the query against each word
+  // in the string and sum the score this prioritizes
+  // the closest match
+  for (auto query_part : query_split) {
+    for (auto part : title_split) {
+      float match_score = strings_match(query_part, part, threshold);
+
+      if (match_score > temporary_best_score) {
+        temporary_best_score = match_score;
+      }
+    }
+
+    // Skip artist check if it is already at the max score
+    if (temporary_best_score != 1.f) {
+      for (auto part : artist_split) {
+        float match_score = strings_match(query_part, part, threshold);
+
+        if (match_score > temporary_best_score) {
+          temporary_best_score = match_score;
+        }
+      }
+    }
+
+    if (temporary_best_score > 0.f) {
+      score += temporary_best_score;
+    } else {
+      score -= penalty; // Penalize if a word is not a match
+    }
+
+    temporary_best_score = 0.f;
+  }
+
+  // Get the score into the 0 to 1 range
+  float normal_score = score / (query_split.size());
+
+  return normal_score;
 }
 
 std::string seconds_to_human_readable(float total_sec_left) {
