@@ -133,6 +133,8 @@ bool resize_image(std::string path, std::string output, sf::Vector2u target_size
 }
 
 bool rasterize_texture(std::string name) {
+  std::cout << "[INFO] Rasterizing '" << name << "'\n";
+
   sfc::SVGImage svg;
   if (svg.loadFromFile(base_path_misc + name + ".svg")) {
     if (std::filesystem::exists(base_path_misc_rasters + name + ".png")) {
@@ -174,15 +176,13 @@ std::shared_ptr<sf::Texture> load_texture(std::string name, bool no_invert) {
     // First try to load an inverted variant if there is one present
     try {
       return load_texture(name + inverted_image_suffix, true);
-    } catch (...) {
+    } catch (const std::runtime_error&) {
       // Load the normal texture and invert manually
     }
   }
 
   if (!std::filesystem::exists(base_path_misc_rasters + name + ".png")) {
-    if (!rasterize_texture(name)) {
-      throw std::runtime_error("[ERROR] Cannot rasterize texture for '" + name + "'.\n");
-    }
+    throw std::runtime_error("Failed to load texture, invalid name '" + name + "'.\n");
   }
 
   sf::Image im;
@@ -451,11 +451,11 @@ int OptimalStringAlignmentDistance(std::u32string p_string1, std::u32string p_st
             std::min(d[i][j-1] + 1,         // insert
             d[i-1][j-1] + l_cost)           // substitution
             );
-            if( (i > 1) && 
-            (j > 1) && 
-            (p_string1[i-1] == p_string2[j-2]) && 
+            if( (i > 1) &&
+            (j > 1) &&
+            (p_string1[i-1] == p_string2[j-2]) &&
             (p_string1[i-2] == p_string2[j-1])
-            ) 
+            )
             {
             d[i][j] = std::min(
             d[i][j],
@@ -495,6 +495,8 @@ float chunks_match(const std::u32string& full_string, const std::u32string& smal
 
 float matching_song(std::u32string query, std::u32string song_title, std::u32string song_artist, size_t threshold) {
   // matching returns a score out of 1 of how good the match is 0 being the worst and 1 being the best
+
+  if (query.empty()) return 1.f; // Show all results if no query is inputted
 
   auto query_split = split_u32(query, U' ');
   auto artist_split = split_u32(song_artist, U' ');

@@ -330,9 +330,9 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
 
       draw_small_song_container(search_result);
 
-      auto search_res_more_bounds = search_result->more.value()->getGlobalBounds();
-      search_res_more_bounds.size.y = 30.f;
-      search_res_more_bounds.position.y -= 15.f;
+      auto search_res_remove_bounds = search_result->remove->getGlobalBounds();
+      search_res_remove_bounds.size.y = 30.f;
+      search_res_remove_bounds.position.y -= 15.f;
 
       auto search_res_bounds = search_result->background.getGlobalBounds();
 
@@ -341,12 +341,12 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
       actual_results_bounds.position.y += playlist_sel_scroll - result_bounds_offset;
       actual_results_bounds.size.y += result_bounds_offset;
 
-      if (actual_results_bounds.contains(search_res_more_bounds.position)) {
-        new_click_event(search_res_click_events, "search_res_more_bounds_" + std::to_string(search_res_id),
+      if (actual_results_bounds.contains(search_res_remove_bounds.position)) {
+        new_click_event(search_res_click_events, "search_res_remove_bounds_" + std::to_string(search_res_id),
           [search_res_id](MenuData&) {
-            std::cout << "Edit " << search_res_id << std::endl;
+            std::cout << "Remove " << search_res_id << std::endl;
           },
-          search_res_more_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
+          search_res_remove_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
         );
 
         new_click_event(search_res_click_events, "search_res_bounds_" + std::to_string(search_res_id),

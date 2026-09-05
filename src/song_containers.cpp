@@ -38,22 +38,23 @@ std::shared_ptr<SmallSongContainerComponent> create_small_song_container(int son
   });
   background.setPosition({cover.getPosition().x - 5.f, cover.getPosition().y - 5.f});
 
-  auto more = std::make_shared<sf::Text>(default_font, "...");
-  more->setFillColor(text_color);
-  setFontSize(*more, small_font_size);
-  more->setPosition({
-    background.getPosition().x + background.getGlobalBounds().size.x - more->getGlobalBounds().size.x - 20.f,
-    (background.getPosition().y - 5.f) + (background.getGlobalBounds().size.y - 5.f) / 2 - more->getGlobalBounds().size.y
+  auto remove_tex = load_texture("trash");
+
+  sf::Sprite remove(*remove_tex);
+  remove.setPosition({
+    background.getPosition().x + background.getGlobalBounds().size.x - remove.getGlobalBounds().size.x - 10.f,
+    background.getPosition().y + background.getGlobalBounds().size.y / 2 - remove.getGlobalBounds().size.y / 2
   });
 
   auto small_song_container_component = std::make_shared<SmallSongContainerComponent>();
-  small_song_container_component->background = background;
-  small_song_container_component->cover_shadow = cover_shadow;
-  small_song_container_component->cover = cover;
-  small_song_container_component->title = title;
-  small_song_container_component->artist = artist;
-  small_song_container_component->more = more;
-  small_song_container_component->cover_tex = cover_texture;
+  small_song_container_component->background = std::move(background);
+  small_song_container_component->cover_shadow = std::move(cover_shadow);
+  small_song_container_component->cover = std::move(cover);
+  small_song_container_component->title = std::move(title);
+  small_song_container_component->artist = std::move(artist);
+  small_song_container_component->remove = std::move(remove);
+  small_song_container_component->remove_tex = std::move(remove_tex);
+  small_song_container_component->cover_tex = std::move(cover_texture);
   return small_song_container_component;
 }
 
@@ -63,5 +64,5 @@ void draw_small_song_container(std::shared_ptr<SmallSongContainerComponent> smal
   window.draw(small_song_container->cover);
   window.draw(*small_song_container->title.value());
   window.draw(*small_song_container->artist.value());
-  window.draw(*small_song_container->more.value());
+  window.draw(small_song_container->remove.value());
 }

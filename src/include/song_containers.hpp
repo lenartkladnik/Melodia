@@ -11,7 +11,8 @@ struct SmallSongContainerComponent {
   sf::RoundedRectangleShape cover;
   std::optional<std::shared_ptr<sf::Text>> title;
   std::optional<std::shared_ptr<sf::Text>> artist;
-  std::optional<std::shared_ptr<sf::Text>> more;
+  std::optional<sf::Sprite> remove;
+  std::shared_ptr<sf::Texture> remove_tex;
   std::shared_ptr<sf::Texture> cover_tex;
 };
 
