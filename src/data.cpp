@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <array>
 #include <unordered_map>
+#include <chrono>
 
 #include "include/utils.hpp"
 #include "include/storage_handler.hpp"
@@ -50,6 +51,7 @@ const int queue_max_char = 26;
 const float queue_contracted_width = 50.f;
 const float control_corner_gap = 15.f;
 const float scroll_speed = 25.f;
+const float min_drag_and_drop_time = 0.15;
 
 // Multiply the characters/font size values by a constant
 // Tested fonts:
@@ -143,6 +145,7 @@ float playlist_search_scroll_lower_bound = -playlist_search_entry_unit / 2;
 float playlist_sel_scroll = playlist_search_scroll_lower_bound;
 bool can_search_string_scroll = false;
 bool search_was_active = false;
+std::chrono::time_point<std::chrono::high_resolution_clock> started_dragging_time;
 
 std::random_device rd;
 std::mt19937 rand_generator(rd());

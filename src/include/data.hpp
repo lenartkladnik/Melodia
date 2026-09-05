@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <random>
+#include <chrono>
 
 #include "utils.hpp"
 #include "drawformable.hpp"
@@ -53,6 +54,7 @@ extern const int queue_max_char;
 extern const float queue_contracted_width;
 extern const float control_corner_gap;
 extern const float scroll_speed;
+extern const float min_drag_and_drop_time;
 
 extern const float font_multiplier;
 extern const float small_font_size;
@@ -122,6 +124,7 @@ extern float playlist_search_scroll_lower_bound;
 extern float playlist_sel_scroll;
 extern bool can_search_string_scroll;
 extern bool search_was_active;
+extern std::chrono::time_point<std::chrono::high_resolution_clock> started_dragging_time;
 
 extern std::random_device rd;
 extern std::mt19937 rand_generator;

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <algorithm>
 #include <thread>
+#include <chrono>
 
 #include "include/data.hpp"
 #include "include/components.hpp"
@@ -221,7 +222,9 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
       search_results_background.getCornersRadius(3)
     });
 
-    // If there is a result being dragged remove the background
+    // If there is a result being dragged remove the background,
+    // but don't hide the background until the drag and drop is
+    // not considered unintentional
     if (dragging_search_result != -1)
       search_results_background_h = 0;
 
@@ -352,6 +355,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
         new_click_event(search_res_click_events, "search_res_bounds_" + std::to_string(search_res_id),
           [search_res_id](MenuData&) {
             dragging_search_result = search_res_id;
+            start_drag_and_drop();
           },
           search_res_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
         );
@@ -361,6 +365,10 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
 
             if (dragging_search_result == search_res_id) {
               dragging_search_result = -1;
+
+              if (was_unintentional_drag_and_drop()) {
+                return;
+              }
 
               // Detect where it was dropped
               auto dropped_pos = get_mouse_pos(render_window);

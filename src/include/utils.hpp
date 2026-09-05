@@ -49,6 +49,8 @@ sf::Color adjust_if_dark_mode(sf::Color a);
 bool color_less_than_color(sf::Color a, sf::Color b);
 bool is_color_black(sf::Color a);
 std::string escape_csv(const std::string& s);
+void start_drag_and_drop();
+bool was_unintentional_drag_and_drop();
 
 template<typename TShape>
 void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {

@@ -651,3 +651,18 @@ std::string escape_csv(const std::string& s) {
   }
   return result;
 }
+
+void start_drag_and_drop() {
+  // For was_unintentional_drag_and_drop
+  started_dragging_time = std::chrono::high_resolution_clock::now();
+}
+
+bool was_unintentional_drag_and_drop() {
+  std::chrono::duration<float> dragging_time = std::chrono::high_resolution_clock::now() - started_dragging_time; // How long the item was dragged for
+
+  if (dragging_time.count() > min_drag_and_drop_time) {
+    return true;
+  }
+
+  return false;
+}
