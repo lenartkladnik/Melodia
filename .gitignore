@@ -5,6 +5,4 @@ build/
 dist/
 external/build/
 external/prog/
-todo/
 src/*_dummy.cpp
-.music_data/
