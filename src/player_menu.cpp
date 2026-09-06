@@ -16,7 +16,7 @@
 
 #include "../external/lib/RoundedRectangleShape.hpp"
 
-std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::string& song_path, int id, const std::string& playlist) {
+std::shared_ptr<StaticPlayerData> init_player(const std::string& song_path, int id, const std::string& playlist) {
   reset_globals();
 
   auto half = (float)(window_size.x / 2);
@@ -185,32 +185,28 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
   });
 
 
-  auto search = std::make_shared<InputComponent>(menu_data, InputComponent::Args::InputField{
+  auto search = std::make_shared<InputComponent>(InputComponent::Args::InputField{
     .id = "player_search_input_c",
     .size = sf::Vector2f{queue_background.getGlobalBounds().size.x - 100.f, 40.f},
     .pos = sf::Vector2f{50.f, queue_background.getPosition().y + 10.f},
     .prompt = U"Search"
   });
 
-  // new_click_event(click_events, [](MenuData& menu_data) {
-  //   std::get<MenuData::PlayerData>(menu_data.data).data->search.clear_input();
-  // }, search.cancel_input_bounds(), sf::Mouse::Button::Left);
-
-  new_click_event(click_events, "main_control", [](MenuData& menu_data) {
+  new_click_event(click_events, "main_control", []() {
     std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();
   }, main_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
   // When the play toggle keybind (default space) is pressed toggle the play state of music
-  play_toggle_signal.connect("toggle_play_state", [&menu_data](){std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();});
+  play_toggle_signal.connect("toggle_play_state", [](){std::get<MenuData::PlayerData>(menu_data.data).music->toggle_play_state();});
 
-  new_click_event(click_events, "next_control", [](MenuData& menu_data) {
+  new_click_event(click_events, "next_control", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.song_id = player.queue[0];
     done_playing(player.queue, player.past_queue);
   }, next_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "previous_control", [](MenuData& menu_data) {
+  new_click_event(click_events, "previous_control", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     if (player.past_queue.size() > 1) {
@@ -222,7 +218,7 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     }
   }, previous_control.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "favorite", [](MenuData& menu_data) {
+  new_click_event(click_events, "favorite", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Toggle favorite song" << std::endl;
@@ -236,7 +232,7 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     }
   }, favorite.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "progress", [](MenuData& menu_data) {
+  new_click_event(click_events, "progress", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.seeking = true;
@@ -245,7 +241,7 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     player.was_playing = player.music->is_playing();
   }, progress.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "queue_toggle", [](MenuData& menu_data) {
+  new_click_event(click_events, "queue_toggle", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.data->queue_expanded = !player.data->queue_expanded;
@@ -284,7 +280,7 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     }
   }, queue_toggle.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "vol_icon", [](MenuData& menu_data) {
+  new_click_event(click_events, "vol_icon", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     if (player.data->volume_tex->getNativeHandle() == player.data->vol_icon->getTexture().getNativeHandle()) {
@@ -301,13 +297,13 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     }
   }, vol_icon.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "vol_slider", [](MenuData& menu_data) {
+  new_click_event(click_events, "vol_slider", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     player.volume_slider_active = true;
   }, vol_slider.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "live", [](MenuData& menu_data) {
+  new_click_event(click_events, "live", []() {
     auto& player = std::get<MenuData::PlayerData>(menu_data.data);
 
     std::cout << "TODO: Toggle live mode" << std::endl;
@@ -321,8 +317,8 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
     }
   }, live.getGlobalBounds(), sf::Mouse::Button::Left);
 
-  new_click_event(click_events, "playlist_selector", [&](MenuData& menu_data) {
-    switch_to_playlist_selector(menu_data);
+  new_click_event(click_events, "playlist_selector", [&]() {
+    switch_to_playlist_selector();
   }, playlist_selector.getGlobalBounds(), sf::Mouse::Button::Left);
 
   auto data = std::make_shared<StaticPlayerData>();
@@ -373,7 +369,9 @@ std::shared_ptr<StaticPlayerData> init_player(MenuData& menu_data, const std::st
   return data;
 }
 
-void display_player(MenuData::PlayerData& player) {
+void display_player() {
+  auto player = std::get<MenuData::PlayerData>(menu_data.data);
+
   global_z_index = 0;
 
   auto& player_data = *player.data;
@@ -730,7 +728,7 @@ void display_player(MenuData::PlayerData& player) {
   draw_window(render_window, window);
 }
 
-void switch_to_player(MenuData& menu_data, std::string playlist) {
+void switch_to_player(std::string playlist) {
   new_random();
 
   menu_data.data = MenuData::PlayerData();
@@ -746,7 +744,7 @@ void switch_to_player(MenuData& menu_data, std::string playlist) {
   pd.past_queue.push_back(pd.song_id);
   pd.is_valid = true;
 
-  pd.data = init_player(menu_data, construct_song_path(pd.song_id), pd.song_id, playlist);
+  pd.data = init_player(construct_song_path(pd.song_id), pd.song_id, playlist);
 }
 
 void done_playing(std::vector<int>& playlist, std::vector<int>& past_queue) {

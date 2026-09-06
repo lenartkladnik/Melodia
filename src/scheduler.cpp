@@ -11,10 +11,10 @@ void remove_done_tasks() {
   tasks.end());
 }
 
-void wait_n_frames(size_t n, std::function<void(MenuData&)> function) {
+void wait_n_frames(size_t n, std::function<void()> function) {
   tasks.emplace_back(function, n);
 }
 
-void on_next_frame(std::function<void(MenuData&)> function) {
+void on_next_frame(std::function<void()> function) {
   tasks.emplace_back(function, 1);
 }

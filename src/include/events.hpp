@@ -92,7 +92,7 @@ void remove_event(std::vector<TUIEvent>& container, std::string id) {
 }
 
 struct ClickEvent : UIEvent {
-  std::function<void(MenuData&)> function;
+  std::function<void()> function;
   sf::Mouse::Button mouse_button;
 };
 
@@ -101,7 +101,7 @@ extern std::vector<ClickEvent> search_res_click_events;
 void new_click_event(
   std::vector<ClickEvent>& container,
   std::string id,
-  std::function<void(MenuData&)> function,
+  std::function<void()> function,
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,
@@ -110,7 +110,7 @@ void new_click_event(
 );
 
 struct ReleaseEvent : UIEvent {
-  std::function<void(MenuData&)> function;
+  std::function<void()> function;
   sf::Mouse::Button mouse_button;
 };
 
@@ -119,23 +119,23 @@ extern std::vector<ReleaseEvent> search_res_release_events;
 void new_release_event(
   std::vector<ReleaseEvent>& container,
   std::string id,
-  std::function<void(MenuData&)> function,
+  std::function<void()> function,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,
   int rank = 0
 );
 
 struct HoverEvent : UIEvent {
-  std::function<void(MenuData&)> on_hover_function;
-  std::function<void(MenuData&)> off_hover_function;
+  std::function<void()> on_hover_function;
+  std::function<void()> off_hover_function;
 };
 
 extern std::vector<HoverEvent> hover_events;
 void new_hover_event(
   std::vector<ClickEvent>& container,
   std::string id,
-  std::function<void(MenuData&)> on_function,
-  std::function<void(MenuData&)> off_function,
+  std::function<void()> on_function,
+  std::function<void()> off_function,
   sf::FloatRect bounds,
   UIComponent* component,
   sf::View view = default_view,
@@ -143,8 +143,8 @@ void new_hover_event(
 );
 
 struct FocusEvent : UIEvent {
-  std::function<void(MenuData&, sf::Vector2f&)> function;
-  std::function<void(MenuData&)> else_function;
+  std::function<void(sf::Vector2f&)> function;
+  std::function<void()> else_function;
   sf::Mouse::Button mouse_button;
 };
 
@@ -152,8 +152,8 @@ extern std::vector<FocusEvent> focus_events;
 void new_focus_event(
   std::vector<FocusEvent>& container,
   std::string id,
-  std::function<void(MenuData&, sf::Vector2f&)> function, // Will get called if the click is within bounds
-  std::function<void(MenuData&)> else_function, // Will get called if click is out of bounds
+  std::function<void(sf::Vector2f&)> function, // Will get called if the click is within bounds
+  std::function<void()> else_function, // Will get called if click is out of bounds
   sf::FloatRect bounds,
   sf::Mouse::Button mouse_button,
   UIComponent* component = nullptr,

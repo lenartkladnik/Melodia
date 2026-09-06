@@ -27,6 +27,7 @@ const int ON_TOP = 999;
 const size_t MAX_PAST_QUEUE_SIZE = 999;
 const size_t NO_REPEAT_ZONE = 3;
 const std::chrono::milliseconds MIN_AUTOCOMPLETE_RESPONSE_TIME = std::chrono::milliseconds(500);
+const size_t MIN_CHAR_COUNT_SEARCH = 3;
 
 const float padding_top = 100.f;
 const float offset = 50.f;

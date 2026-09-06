@@ -77,8 +77,8 @@ int app() {
 
   render_window.setIcon(icon.getSize(), icon.getPixelsPtr());
 
-  switch_to_playlist_selector(menu_data); // Start as the playlist selector
-  // switch_to_player(window, render_window, menu_data, "tmp");
+  switch_to_playlist_selector(); // Start as the playlist selector
+  // switch_to_player(window, render_window, "tmp");
 
   getFontOffsetPixels(small_font_size);
   getFontOffsetPixels(medium_font_size);
@@ -135,7 +135,7 @@ int app() {
 
   while (render_window.isOpen()) {
     for (auto& task : tasks) {
-      task.tick(menu_data);
+      task.tick();
     }
     remove_done_tasks();
 
@@ -185,7 +185,7 @@ int app() {
             playlist_sel.data->search->unfocus();
 
             // After the resize all items must be re-rendered
-            switch_to_playlist_selector(menu_data);
+            switch_to_playlist_selector();
 
             break;
           }
@@ -253,7 +253,7 @@ int app() {
         on<sf::Event::MouseButtonPressed>(*event, click_events,
           [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
           [&](const auto*, auto* item) {
-            item->function(menu_data);
+            item->function();
           },
           [&](const auto*, auto* item) {
             if (item->component)
@@ -264,7 +264,7 @@ int app() {
         on_anywhere<sf::Event::MouseButtonReleased>(*event, release_events,
           [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
           [&](const auto*, auto* item) {
-            item->function(menu_data);
+            item->function();
           }
         );
 
@@ -273,10 +273,10 @@ int app() {
           [&](const auto* e, auto& item) { return item.mouse_button == e->button; },
           [&](const auto* e, auto* item) {
             auto pos = render_window.mapPixelToCoords(e->position, item->view);
-            item->function(menu_data, pos);
+            item->function(pos);
           },
           [&](const auto*, auto* item){
-            item->else_function(menu_data);
+            item->else_function();
           }
         );
 
@@ -311,7 +311,7 @@ int app() {
             on<sf::Event::MouseButtonPressed>(*event, search_res_click_events,
               [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
               [&](const auto*, const auto* item) {
-                item->function(menu_data);
+                item->function();
               },
               [&](const auto*, const auto* item) {
                 if (item->component)
@@ -322,7 +322,7 @@ int app() {
             on_anywhere<sf::Event::MouseButtonReleased>(*event, search_res_release_events,
               [&](const auto* e, const auto& item) { return item.mouse_button == e->button; },
               [&](const auto*, const auto* item) {
-                item->function(menu_data);
+                item->function();
               }
             );
           }
@@ -423,7 +423,7 @@ int app() {
           player.playing_song_id = player.song_id;
 
           player.music->play();
-          player.data = init_player(menu_data, player.song_path, player.song_id, player.playlist);
+          player.data = init_player(player.song_path, player.song_id, player.playlist);
           player.data->cover.setTexture(player.data->cover_texture.get()); // Ensure the cover art texture is set
 
           // Reset state
@@ -464,7 +464,7 @@ int app() {
           player.reset_cursor = true;
         }
 
-        if (player.data) display_player(player);
+        if (player.data) display_player();
         else player.playing_song_id = -1; // Something went wrong re-init
 
       break;
@@ -497,7 +497,7 @@ int app() {
 
 
         if (playlist_sel.data) {
-          if (!display_playlist_selector(playlist_sel, menu_data)) break; // false returned when switched to new menu
+          if (!display_playlist_selector()) break; // false returned when switched to new menu
         }
 
       break;

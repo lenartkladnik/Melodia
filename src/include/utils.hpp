@@ -105,11 +105,10 @@ inline BS::thread_pool<> multistate_future_pool;
 
 template<typename T>
 class MultistateFuture {
-  private:
+  public:
     std::vector<std::future<T>> futures;
     std::vector<size_t> desires;
 
-  public:
     template<typename TFunc>
     void launch(TFunc func, size_t desire) {
       futures.emplace_back(multistate_future_pool.submit_task(std::move(func)));
@@ -154,6 +153,8 @@ class MultistateFuture {
 
         if (all_ready) // Even if min_desire wasn't hit exit when all the futures complete
           break;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
     }
 
@@ -168,6 +169,8 @@ class MultistateFuture {
 
         if (all_ready)
           break;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
     }
 };

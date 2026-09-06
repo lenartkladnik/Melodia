@@ -127,7 +127,7 @@ class InputComponent : public UIComponent {
     };
 
     // Input field input component
-    InputComponent(MenuData&, Args::InputField arguments)
+    InputComponent(Args::InputField arguments)
       : UIComponent(arguments.id, arguments.hidden),
         input_prompt(arguments.prompt),
         corner_radius(arguments.corner_radius),
@@ -178,11 +178,11 @@ class InputComponent : public UIComponent {
       selection_background.setCornersRadius(4);
 
       new_focus_event(focus_events, id,
-        [this](MenuData&, sf::Vector2f pos) {
+        [this](sf::Vector2f pos) {
           if (!is_hidden())
             focus(pos);
         },
-        [this](MenuData&) {
+        [this]() {
           if (!this->focus_event_else_is_empty) {
             unfocus();
           }
@@ -192,7 +192,7 @@ class InputComponent : public UIComponent {
       new_text_event(text_events, id, this, this);
 
       new_release_event(release_events, id,
-        [this](MenuData&) {
+        [this]() {
           selecting = false;
         },
         sf::Mouse::Button::Left, this);
@@ -201,7 +201,7 @@ class InputComponent : public UIComponent {
     }
 
     // Text replica input component
-    InputComponent(MenuData&, Args::TextReplica arguments)
+    InputComponent(Args::TextReplica arguments)
       : UIComponent(arguments.id),
         input_prompt(arguments.text_reference->getString().toUtf32()),
         input_text(default_font, arguments.text_reference->getString(), 20),
@@ -244,7 +244,7 @@ class InputComponent : public UIComponent {
       new_text_event(text_events, id, this, this);
 
       new_release_event(release_events, id,
-        [this](MenuData&) {
+        [this]() {
           selecting = false;
         },
       sf::Mouse::Button::Left, this);
@@ -325,11 +325,11 @@ class InputComponent : public UIComponent {
       remove_if_event(focus_events, component_id);
 
       new_focus_event(focus_events, id,
-        [this](MenuData&, sf::Vector2f pos) {
+        [this](sf::Vector2f pos) {
           if (!is_hidden())
             focus(pos);
         },
-        [this](MenuData&) {
+        [this]() {
           if (!this->focus_event_else_is_empty) {
             unfocus();
           }
@@ -620,7 +620,7 @@ class InputComponent : public UIComponent {
 
     void register_action(std::function<void(InputComponent*)> action_function) {
       if (action_button) {
-        new_click_event(click_events, id + "_action_button", [action_function, this](MenuData&) {
+        new_click_event(click_events, id + "_action_button", [action_function, this]() {
           action_function(this);
         }, action_button->getGlobalBounds(), sf::Mouse::Button::Left, this);
       }
@@ -635,7 +635,7 @@ class ButtonComponent : public UIComponent {
     sf::RenderTexture& window;
     sf::RoundedRectangleShape button_shape;
     sf::Text button_text;
-    std::function<void(MenuData&)> function;
+    std::function<void()> function;
     sf::Color m_button_shape_color;
 
   public:
@@ -646,7 +646,7 @@ class ButtonComponent : public UIComponent {
         std::string text;
         sf::Vector2f size;
         sf::Vector2f pos;
-        std::function<void(MenuData&)> function;
+        std::function<void()> function;
         bool hidden = false;
         sf::Color button_shape_color = dark_background_color;
         sf::Color button_text_color = text_color;
@@ -678,7 +678,7 @@ class ButtonComponent : public UIComponent {
         button_shape.getPosition().y + button_shape.getGlobalBounds().size.y / 2 - button_text.getGlobalBounds().size.y
       });
 
-      new_click_event(click_events, arguments.id, [this](MenuData& menu_data) { if (!is_hidden()) this->function(menu_data); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
+      new_click_event(click_events, arguments.id, [this]() { if (!is_hidden()) this->function(); }, button_shape.getGlobalBounds(), sf::Mouse::Button::Left, this);
     }
 
     ~ButtonComponent() = default;
@@ -838,7 +838,7 @@ class AreaComponent : public UIComponent {
       struct Area {
         std::string id;
         sf::FloatRect bounds;
-        std::function<void(MenuData&)> function = [](MenuData&){};
+        std::function<void()> function = [](){};
         sf::View view = default_view;
         bool permanent = true;
         int rank = 0;

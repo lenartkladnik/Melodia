@@ -32,6 +32,7 @@ extern const int ON_TOP; // Maximum z-index that is assumed to be on the top of 
 extern const size_t MAX_PAST_QUEUE_SIZE;
 extern const size_t NO_REPEAT_ZONE; // A song won't repeat for at least this many songs (if the number of songs in the playlist is more than this value)
 extern const std::chrono::milliseconds MIN_AUTOCOMPLETE_RESPONSE_TIME; // If autocomplete API takes longer then this an empty list is returned
+extern const size_t MIN_CHAR_COUNT_SEARCH;
 
 extern const float padding_top;
 extern const float offset;
@@ -238,6 +239,7 @@ class MusicPlayer {
 
 struct AutocompleteResult {
   std::string query;
+  std::vector<std::pair<std::string, std::string>> pairs;
   std::vector<std::string> results;
 };
 

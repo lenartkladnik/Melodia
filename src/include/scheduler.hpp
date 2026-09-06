@@ -5,19 +5,18 @@
 #include <functional>
 
 class Task;
-struct MenuData;
 
 extern std::vector<Task> tasks;
 
 class Task {
   private:
-    std::function<void(MenuData&)> function;
+    std::function<void()> function;
     size_t frame_timer;
     bool done = false;
 
   public:
     Task(
-      std::function<void(MenuData&)> function,
+      std::function<void()> function,
       size_t n_frames
     )
       : function(function),
@@ -28,9 +27,9 @@ class Task {
       return done;
     }
 
-    void tick(MenuData& menu_data) {
+    void tick() {
       if (frame_timer == 0) {
-        function(menu_data);
+        function();
         done = true;
 
         return;
@@ -42,7 +41,7 @@ class Task {
 
 void remove_done_tasks();
 
-void wait_n_frames(std::function<void(MenuData&)> function);
-void on_next_frame(std::function<void(MenuData&)> function);
+void wait_n_frames(std::function<void()> function);
+void on_next_frame(std::function<void()> function);
 
 #endif
