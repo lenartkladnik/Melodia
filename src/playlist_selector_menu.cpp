@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#include <future>
 
 #include "include/data.hpp"
 #include "include/components.hpp"
@@ -18,7 +19,7 @@
 
 #include "../external/lib/RoundedRectangleShape.hpp"
 
-std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData& menu_data) {
+std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData&) {
   reset_globals();
 
   auto download_tex = load_texture("download");
@@ -39,6 +40,30 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData& men
 
   auto playlists = get_all_playlists();
 
+  auto remove_icon_tex = load_texture("remove_icon");
+  sf::Sprite remove_icon(*remove_icon_tex);
+  remove_icon.setPosition({
+    window_size.x / 2 - remove_icon.getGlobalBounds().size.x / 2,
+    window_size.y - remove_icon.getGlobalBounds().size.y - 5.f
+  });
+
+  auto remove_icon_hover_tex = load_texture("remove_icon_hover");
+  sf::Sprite remove_icon_hover(*remove_icon_hover_tex);
+  remove_icon_hover.setPosition({
+    remove_icon.getPosition().x,
+    remove_icon.getPosition().y - 10.f
+  });
+
+  sf::RoundedRectangleShape remove_area({
+    remove_icon.getGlobalBounds().size.x + 4.f,
+    remove_icon.getGlobalBounds().size.y + 4.f
+  }, 8, main_n);
+  remove_area.setPosition({
+    remove_icon.getPosition().x - remove_area.getGlobalBounds().size.x / 2 + remove_icon.getGlobalBounds().size.x / 2,
+    remove_icon.getPosition().y - remove_area.getGlobalBounds().size.y / 2 + remove_icon.getGlobalBounds().size.y / 2
+  });
+  remove_area.setFillColor(lighter_background_color);
+
   DTCache drawables_cache;
 
 
@@ -47,10 +72,15 @@ std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData& men
   data->playlists = playlists;
   data->drawables_cache = drawables_cache;
   data->search_res_area = nullptr;
+  data->remove_icon_tex = remove_icon_tex;
+  data->remove_icon = remove_icon;
+  data->remove_icon_hover_tex = remove_icon_hover_tex;
+  data->remove_icon_hover = remove_icon_hover;
+  data->remove_area = remove_area;
   return data;
 }
 
-bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, MenuData& menu_data) {
+bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, MenuData&) {
   global_z_index = 0;
 
   auto& data = *playlist_sel.data;
@@ -85,6 +115,13 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
     cancel_drop_area.setFillColor(cancel_area_color);
 
     window.draw(cancel_drop_area);
+
+    window.draw(data.remove_area);
+    if (data.remove_area.getGlobalBounds().contains(get_mouse_pos(render_window))) {
+      window.draw(data.remove_icon_hover.value());
+    } else {
+      window.draw(data.remove_icon.value());
+    }
   }
 
   // Favourites
@@ -139,7 +176,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
           .text_reference = playlist_name_text_reference,
           .font_size = large_font_size,
           .select_all_on_click = true,
-          .action_function = [playlist_name_str, &menu_data](InputComponent* component){
+          .action_function = [playlist_name_str](InputComponent* component){
             // TODO: Support utf32 in playlist names
             auto utf8_new_name = sf::String(component->get_input_string()).toUtf8();
             std::string new_name = std::string(reinterpret_cast<const char*>(utf8_new_name.data()), utf8_new_name.size());
@@ -206,12 +243,24 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
   if (playlist_sel.data->search->is_active() && playlist_sel.data->search->is_focused()) {
     search_was_active = true;
 
-    float max_search_results_background_h = window_size.y - 160.f;
+    auto query = playlist_sel.data->search->get_input_string();
+
+    // Check for new search autocompletion
+    if (playlist_sel.data->last_autocomplete_query != query) {
+      playlist_sel.data->autocomplete_mf = get_search_autocomplete(query);
+      playlist_sel.data->last_autocomplete_query = query;
+    }
+
+    float max_search_results_background_h = window_size.y * 0.8;
     float search_results_background_h = std::min(playlist_search_entry_unit * search_results.size(), max_search_results_background_h);
+
+    float search_autocomplete_h = 0.f;
+    if (playlist_sel.data->search->not_empty())
+      search_autocomplete_h = window_size.y * 0.1;
 
     sf::RoundedRectangleShape search_results_background({
       data.search->background_bounds().size.x,
-      search_results_background_h + 10.f
+      search_results_background_h + search_autocomplete_h + 10.f
     }, 8, main_n);
     search_results_background.setPosition({data.search->background_pos().x, data.search->background_pos().y + data.search->background_bounds().size.y});
     search_results_background.setFillColor(light_background_color);
@@ -228,23 +277,34 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
     if (dragging_search_result != -1)
       search_results_background_h = 0;
 
-    // Only make the bottom corners not rounded if there are any search results
-    if (search_results_background_h != 0) {
-      playlist_sel.data->search->background_set_corner_radii(std::array<float, 4>{
-        playlist_sel.data->search->background_get_corner_radius(0),
-        playlist_sel.data->search->background_get_corner_radius(1),
-        0.f,
-        0.f
-      });
+    static std::string suggest_song_string = "";
+    auto autocomplete = playlist_sel.data->autocomplete_mf.get();
+    if (autocomplete) {
+      auto results = autocomplete.value().results;
+      if (results.size() > 0) {
+        suggest_song_string = results[0];
+      }
     }
-    else {
-      playlist_sel.data->search->background_reset_corner_radii();
-    }
+
+    sf::Text suggest_song(default_font, suggest_song_string);
+    suggest_song.setFillColor(light_text_color);
+    suggest_song.setCharacterSize(medium_font_size);
+    suggest_song.setPosition({
+      search_results_background.getPosition().x + 10.f,
+      search_results_background.getPosition().y + search_results_background.getGlobalBounds().size.y - suggest_song.getGlobalBounds().size.y - 10.f
+    });
+
+    playlist_sel.data->search->background_set_corner_radii(std::array<float, 4>{
+      playlist_sel.data->search->background_get_corner_radius(0),
+      playlist_sel.data->search->background_get_corner_radius(1),
+      0.f,
+      0.f
+    });
 
     can_search_string_scroll = true;
 
     if (playlist_sel.data->search->should_input_refresh()) {
-      search_results = search_all_songs(playlist_sel.data->search->get_input_string());
+      search_results = search_all_songs(query);
       playlist_sel.data->search->input_refresh();
       search_res_click_events.clear();
       search_res_release_events.clear();
@@ -268,34 +328,36 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), &playlist_sel_scroll, &can_search_string_scroll);
 
-    if (search_results_background_h != 0)
-      window.draw(search_results_background);
+    window.draw(search_results_background);
+    window.draw(suggest_song);
 
     // Show search results
 
     int idx = 0;
     float last_y_pos = 0.f;
 
-    float total_content_h = playlist_search_entry_height * (search_results.size() + 1) - max_search_results_background_h;
+    float total_content_h = playlist_search_entry_height * (search_results.size() + 1) - max_search_results_background_h + 10.f;
     if (total_content_h < 0) {
       total_content_h = playlist_search_scroll_lower_bound;
     }
 
     playlist_sel_scroll = std::clamp(playlist_sel_scroll, playlist_search_scroll_lower_bound, total_content_h);
 
+    float view_h = search_results_background_h + 10.f;
+
     float view_left = search_results_background.getPosition().x / window_size.x;
     float view_top = (search_results_background.getPosition().y) / window_size.y;
     float view_width = search_results_background.getGlobalBounds().size.x / window_size.x;
-    float view_height = search_results_background_h / window_size.y;
+    float view_height = view_h / window_size.y;
 
     sf::View search_results_view;
     search_results_view.setSize({
       search_results_background.getGlobalBounds().size.x,
-      search_results_background_h
+      view_h
     });
     search_results_view.setCenter({
       search_results_background.getPosition().x + search_results_background.getGlobalBounds().size.x / 2.f,
-      search_results_background.getPosition().y + search_results_background_h / 2.f + playlist_sel_scroll
+      search_results_background.getPosition().y + view_h / 2.f + playlist_sel_scroll
     });
     search_results_view.setViewport(sf::FloatRect(
       {view_left, view_top},
@@ -333,10 +395,6 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
 
       draw_small_song_container(search_result);
 
-      auto search_res_remove_bounds = search_result->remove->getGlobalBounds();
-      search_res_remove_bounds.size.y = 30.f;
-      search_res_remove_bounds.position.y -= 15.f;
-
       auto search_res_bounds = search_result->background.getGlobalBounds();
 
       auto actual_results_bounds = search_results_background.getGlobalBounds();
@@ -344,14 +402,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
       actual_results_bounds.position.y += playlist_sel_scroll - result_bounds_offset;
       actual_results_bounds.size.y += result_bounds_offset;
 
-      if (actual_results_bounds.contains(search_res_remove_bounds.position)) {
-        new_click_event(search_res_click_events, "search_res_remove_bounds_" + std::to_string(search_res_id),
-          [search_res_id](MenuData&) {
-            std::cout << "Remove " << search_res_id << std::endl;
-          },
-          search_res_remove_bounds, sf::Mouse::Button::Left, nullptr, search_results_view
-        );
-
+      if (actual_results_bounds.contains(search_res_bounds.position)) {
         new_click_event(search_res_click_events, "search_res_bounds_" + std::to_string(search_res_id),
           [search_res_id](MenuData&) {
             dragging_search_result = search_res_id;
@@ -367,12 +418,21 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
               dragging_search_result = -1;
 
               if (was_unintentional_drag_and_drop()) {
+                std::cout << "[INFO] This drag and drop action was considered unintentional, skipping.\n";
                 return;
               }
 
               // Detect where it was dropped
               auto dropped_pos = get_mouse_pos(render_window);
 
+              // Check if it was dropped on the remove area
+              if (data->remove_area.getGlobalBounds().contains(dropped_pos)) {
+                remove_song(search_res_id);
+                switch_to_playlist_selector(menu_data);
+                return;
+              }
+
+              // Check if it was dropped on any of the existing playlists
               for (size_t i = 0; i < data->playlists.size(); i++) {
                 auto background = data->drawables_cache.get(i, "sel_background");
                 auto background_bounds = background.drawformable->getGlobalBounds();
@@ -384,6 +444,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
                 }
               }
 
+              // Check if it was dropped on empty space in the playlist_drop_area_bounds
               if (playlist_drop_area_bounds.contains(dropped_pos)) {
                 create_new_playlist(search_res_id);
                 switch_to_playlist_selector(menu_data);
@@ -464,7 +525,7 @@ bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, Men
   return true;
 }
 
-void switch_to_playlist_selector(MenuData& menu_data) {
+void switch_to_playlist_selector(MenuData&) {
   menu_data.data = MenuData::PlaylistSelectorData();
   menu_data.type = MenuData::PlaylistSelector;
 

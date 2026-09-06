@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <future>
 
 #include "include/data.hpp"
 #include "include/components.hpp"
@@ -270,33 +271,6 @@ bool _download_song_from_query(const std::u32string& query, size_t new_id) {
                              //     |-> 2 in _resize_cover_art (normal)
                              //     |-> 2 in _resize_cover_art (small)
 
-  progress_bar_doing_string = "Finding yt-dlp";
-
-  std::cout << "Info: Checking if yt-dlp already exists on the system\n";
-
-  std::string yt_dlp_path = "yt-dlp";
-  if (!std::filesystem::exists(get_yt_dlp_downloaded_path()) &&
-      !std::system("yt-dlp --version >"
-    #ifdef _WIN32
-      "nul 2>nul"
-    #else
-      "/dev/null 2>&1"
-    #endif
-    ) == 0) {
-    std::cout << "Info: yt-dlp was not found on the system and will be downloaded.\n";
-
-    progress_bar_doing_string = "Downloading yt-dlp";
-
-    yt_dlp_path = get_yt_dlp_downloaded_path();
-    if (!_download_file(get_yt_dlp_download_url(), yt_dlp_path)) {
-      throw std::runtime_error("Failed to download the yt-dlp binary form '" + yt_dlp_path + "'. Consider installing yt-dlp yourself systemwide.");
-    }
-    #ifndef _WIN32
-    // On POSIX like systems also chmod +x the file
-    system(("chmod +x " + yt_dlp_path).c_str());
-    #endif
-  }
-
   std::cout << "Info: Attempting to download song from query '" << u32_to_utf8(query) << "'.\n";
 
   progress_bar_doing_string = "Downloading song file and metadata";
@@ -315,10 +289,44 @@ bool _download_song_from_query(const std::u32string& query, size_t new_id) {
   return true;
 }
 
+std::string find_yt_dlp() {
+  std::cout << "[INFO] Checking if yt-dlp exists on the system\n";
+
+  std::string yt_dlp_path = "yt-dlp";
+  if (!std::filesystem::exists(get_yt_dlp_downloaded_path()) &&
+      !std::system("yt-dlp --version >"
+    #ifdef _WIN32
+      "nul 2>nul"
+    #else
+      "/dev/null 2>&1"
+    #endif
+    ) == 0) {
+    std::cout << "[INFO] yt-dlp was not found on the system and will be downloaded.\n";
+
+    progress_bar_doing_string = "Downloading yt-dlp";
+
+    yt_dlp_path = get_yt_dlp_downloaded_path();
+    if (!_download_file(get_yt_dlp_download_url(), yt_dlp_path)) {
+      throw std::runtime_error("Failed to download the yt-dlp binary form '" + yt_dlp_path + "'. Consider installing yt-dlp yourself systemwide.");
+    }
+    #ifndef _WIN32
+    // On POSIX like systems also chmod +x the file
+    system(("chmod +x " + yt_dlp_path).c_str());
+    #endif
+  }
+
+  return yt_dlp_path;
+}
+
 void download_from_search(InputComponent* component) {
+  if (yt_dlp_path.empty()) {
+    std::cout << "[ERROR] Can't download since yt-dlp doesn't exist on the system.\n";
+    return;
+  }
+
   auto query = component->get_input_string();
 
-  if (query.empty()) return; // Don't download without query
+  if (query.empty()) return; // Don't try download without query
 
   auto new_id = get_next_avaliable_song_id();
 
@@ -327,7 +335,7 @@ void download_from_search(InputComponent* component) {
     if (!success) {
       std::cout << "Failed to download song.\n";
 
-      remove_song(std::to_string(new_id));
+      remove_song(new_id);
 
       // Reset progress bar
       progress_bar_amount = progress_bar_total;
@@ -342,3 +350,94 @@ void download_from_search(InputComponent* component) {
   });
   download_song_thread.detach();
 }
+
+AutocompleteResult get_search_autocomplete_yt_music(const std::u32string& query) {
+  std::string utf8_query = u32_to_utf8(query);
+
+  std::string host = "https://music.youtube.com";
+  std::string path = "/youtubei/v1/music/get_search_suggestions?prettyPrint=false";
+
+  nlohmann::json body = {
+    {"input", utf8_query},
+    {"context", {{"client", {
+      {"clientName", "WEB_REMIX"},
+      {"clientVersion", "1.20240101.01.00"}
+    }}}}
+  };
+
+  httplib::Client cli(host);
+  cli.set_connection_timeout(MIN_AUTOCOMPLETE_RESPONSE_TIME);
+  cli.set_read_timeout(MIN_AUTOCOMPLETE_RESPONSE_TIME);
+
+  httplib::Headers headers = {
+      {"Origin", "https://music.youtube.com"},
+      {"X-Youtube-Client-Name", "67"},
+      {"X-Youtube-Client-Version", "1.20240101.01.00"},
+  };
+
+  httplib::Result res;
+
+  try {
+    res = cli.Post(path, headers, body.dump(), "application/json");
+  } catch (...) {
+    std::cout << "[ERROR] Failed to perform a POST request for autocomplete.\n";
+    return AutocompleteResult(utf8_query, {}); // Failed to get results fast enough or something went wrong in the request, return no suggestions
+  }
+
+  if (!res || res->status != 200) {
+    std::cout << "[ERROR] Failed to fetch valid response for autocomplete (" << (res ? ("status code is " + std::to_string(res->status)) : "no response was given") << ").\n";
+    if (res)
+      std::cout << "        Error body is:\n" << res->body << "\n";
+
+    return AutocompleteResult(utf8_query, {}); // Something went wrong, return no suggestion
+  }
+
+  nlohmann::json root = nlohmann::json::parse(res->body);
+
+  auto join_runs = [](const nlohmann::json& node) {
+    std::string text;
+    for (const auto& run : node.value("runs", nlohmann::json::array()))
+        text += run.value("text", "");
+    return text;
+  };
+
+  std::vector<std::string> suggestions;
+  for (const auto& section : root.value("contents", nlohmann::json::array())) {
+    auto renderers = section.value("searchSuggestionsSectionRenderer", nlohmann::json::object()).value("contents", nlohmann::json::array());
+    for (const auto& item : renderers) {
+      for (const char* key : {"searchSuggestionRenderer", "historySuggestionRenderer"}) {
+        if (item.contains(key))
+          suggestions.push_back(title_string(join_runs( // title_string makes every first letter of a word uppercase
+            item[key].value("suggestion", nlohmann::json::object())
+          )));
+      }
+    }
+  }
+
+  return AutocompleteResult(utf8_query, suggestions);
+}
+
+AutocompleteResult get_search_autocomplete_ytdlp(const std::u32string& query) {
+  std::string utf8_query = u32_to_utf8(query);
+
+  if (yt_dlp_path.empty()) {
+    std::cout << "[ERROR] Can't get search autocompletion results with yt-dlp since it doesn't exist on the system.\n";
+    return AutocompleteResult(utf8_query, {});
+  }
+
+  int n = 1; // Number of songs
+  std::string r = exec((yt_dlp_path + " --print \"%(title)s\" \"ytsearch" + std::to_string(n) + ":music:song:" + utf8_query + "\"").c_str());
+
+  std::vector<std::string> suggestions = split_string(r, '\n');
+
+  return AutocompleteResult(utf8_query, suggestions);
+}
+
+MultistateFuture<AutocompleteResult> get_search_autocomplete(const std::u32string& query) {
+  MultistateFuture<AutocompleteResult> mf;
+  mf.launch([&](){return get_search_autocomplete_yt_music(query);}, 1);
+  mf.launch([&](){return get_search_autocomplete_ytdlp(query);}, 2);
+
+  return mf;
+}
+

@@ -3,6 +3,10 @@
 
 #include <SFML/Graphics.hpp>
 #include <string>
+#include <future>
+#include <chrono>
+
+#include "../../external/lib/BS_thread_pool.hpp"
 
 void debug_draw_bounds(sf::RenderTexture& window, sf::FloatRect bounds);
 template<typename TIterable>
@@ -51,6 +55,34 @@ bool is_color_black(sf::Color a);
 std::string escape_csv(const std::string& s);
 void start_drag_and_drop();
 bool was_unintentional_drag_and_drop();
+std::string title_string(const std::string& s);
+void cleanup();
+
+template<typename TChar>
+std::vector<std::basic_string<TChar>> split_string(const std::basic_string<TChar>& s, TChar delim) {
+  std::vector<std::basic_string<TChar>> result;
+  if (s.empty()) return result;
+  size_t from = 0;
+  while (1) {
+    size_t pos = s.find(delim, from);
+    if (pos == std::string::npos) {
+      if (from < s.size()) {
+        result.emplace_back(s.substr(from));
+      }
+      break;
+    }
+    auto subs = s.substr(from, pos - from);
+    if (!subs.empty())
+      result.emplace_back(subs);
+    from = pos + 1;
+  }
+  return result;
+}
+
+template<typename T>
+bool is_future_ready(const std::future<T>& f) {
+  return f.valid() && f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
 
 template<typename TShape>
 void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {
@@ -68,5 +100,76 @@ void setGlobalBounds(TShape& target, const sf::FloatRect refBounds) {
     refBounds.position.y - localBounds.position.y * scaleY
   });
 }
+
+inline BS::thread_pool<> multistate_future_pool;
+
+template<typename T>
+class MultistateFuture {
+  private:
+    std::vector<std::future<T>> futures;
+    std::vector<size_t> desires;
+
+  public:
+    template<typename TFunc>
+    void launch(TFunc func, size_t desire) {
+      futures.emplace_back(multistate_future_pool.submit_task(std::move(func)));
+      desires.push_back(desire);
+    }
+
+    std::optional<T> get() {
+      size_t i = 0;
+      int max_desire = -1;
+
+      std::optional<T> result;
+
+      for (auto& future : futures) {
+        if (is_future_ready(future)) {
+          if ((int)desires[i] > max_desire) {
+            max_desire = (int)desires[i];
+            result = future.get();
+          }
+        }
+
+        i++;
+      }
+
+      return result;
+    }
+
+    void wait_for(size_t min_desire) {
+      while (1) {
+        bool all_ready = true;
+
+        size_t i = 0;
+        for (const auto& future : futures) {
+          if (is_future_ready(future)) {
+            if (desires[i] >= min_desire)
+              break;
+          } else {
+            all_ready = false;
+          }
+
+          i++;
+        }
+
+        if (all_ready) // Even if min_desire wasn't hit exit when all the futures complete
+          break;
+      }
+    }
+
+    void wait() {
+      while (1) {
+        bool all_ready = true;
+
+        for (const auto& future : futures) {
+          if (!is_future_ready(future))
+            all_ready = false;
+        }
+
+        if (all_ready)
+          break;
+      }
+    }
+};
 
 #endif

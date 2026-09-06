@@ -838,7 +838,7 @@ class AreaComponent : public UIComponent {
       struct Area {
         std::string id;
         sf::FloatRect bounds;
-        std::function<void(MenuData&)> function;
+        std::function<void(MenuData&)> function = [](MenuData&){};
         sf::View view = default_view;
         bool permanent = true;
         int rank = 0;

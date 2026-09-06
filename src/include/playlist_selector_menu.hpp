@@ -7,8 +7,8 @@
 #include "../../external/lib/RoundedRectangleShape.hpp"
 #include "data.hpp"
 
-std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData& menu_data);
-bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, MenuData& menu_data);
-void switch_to_playlist_selector(MenuData& menu_data);
+std::shared_ptr<StaticPlaylistSelectorData> init_playlist_selector(MenuData&);
+bool display_playlist_selector(MenuData::PlaylistSelectorData& playlist_sel, MenuData&);
+void switch_to_playlist_selector(MenuData&);
 
 #endif

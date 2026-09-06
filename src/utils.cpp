@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <string>
+#include <cctype>
 #include <unicode/uchar.h>
 #include <unicode/unistr.h>
 #include <unicode/utypes.h>
@@ -366,26 +367,6 @@ bool isSubstring(const std::u32string& s1, const std::u32string& s2) {
   return s1.find(s2) != std::string::npos || s2.find(s1) != std::string::npos;
 }
 
-std::vector<std::u32string> split_u32(const std::u32string& s, char32_t delim) {
-  std::vector<std::u32string> result;
-  if (s.empty()) return result;
-  size_t from = 0;
-  while (1) {
-    size_t pos = s.find(delim, from);
-    if (pos == std::string::npos) {
-      if (from < s.size()) {
-        result.emplace_back(s.substr(from));
-      }
-      break;
-    }
-    auto subs = s.substr(from, pos - from);
-    if (!subs.empty())
-      result.emplace_back(subs);
-    from = pos + 1;
-  }
-  return result;
-}
-
 // From: https://github.com/guilhermeagostinelli/levenshtein/blob/master/levenshtein.cpp
 int LevenshteinDistance(std::u32string word1, std::u32string word2) {
   int size1 = word1.size();
@@ -498,9 +479,9 @@ float matching_song(std::u32string query, std::u32string song_title, std::u32str
 
   if (query.empty()) return 1.f; // Show all results if no query is inputted
 
-  auto query_split = split_u32(query, U' ');
-  auto artist_split = split_u32(song_artist, U' ');
-  auto title_split = split_u32(song_title, U' ');
+  auto query_split = split_string(query, U' ');
+  auto artist_split = split_string(song_artist, U' ');
+  auto title_split = split_string(song_title, U' ');
 
   const float penalty = 1.f;
 
@@ -660,9 +641,39 @@ void start_drag_and_drop() {
 bool was_unintentional_drag_and_drop() {
   std::chrono::duration<float> dragging_time = std::chrono::high_resolution_clock::now() - started_dragging_time; // How long the item was dragged for
 
-  if (dragging_time.count() > min_drag_and_drop_time) {
+  if (dragging_time.count() < min_drag_and_drop_time) {
     return true;
   }
 
   return false;
+}
+
+std::string title_string(const std::string& s) {
+  std::string result;
+  bool next_upper = true;
+
+  for (auto c : s) {
+    if (next_upper) {
+      c = std::toupper(c);
+      next_upper = false;
+    }
+
+    if (c == ' ') {
+      next_upper = true;
+    }
+
+    result += c;
+  }
+
+  return result;
+}
+
+void cleanup() {
+  std::cout << "[INFO] Exiting...\n";
+  try {
+    // Wait for any ongoing tasks to finish
+    multistate_future_pool.wait();
+  } catch (...) {
+    std::cout << "[WARN] Force exiting.\n";
+  }
 }

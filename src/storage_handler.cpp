@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include "include/data.hpp"
 #include "include/utils.hpp"
+#include "include/storage_handler.hpp"
 
 extern const std::string base_path = "./";
 extern const std::string base_path_misc = base_path + "misc/";
@@ -45,13 +46,19 @@ void remove_playlist(std::string playlist) {
   } catch (...) {}
 }
 
-void remove_song(std::string id) {
+void remove_song(int id) {
   // Try to remove all items which make up a song
   std::vector<std::string> items = {"title", "artist", "mp3", "png", "small.png"};
   for (const auto& item : items) {
     try {
-      std::filesystem::remove(id + "." + item);
+      std::filesystem::remove(base_music_path_data + std::to_string(id) + "." + item);
     } catch (...) {}
+  }
+
+  // Remove the song from all playlists
+  auto playlists = get_all_playlists();
+  for (const auto& playlist : playlists) {
+    remove_from_playlist(playlist, id);
   }
 }
 

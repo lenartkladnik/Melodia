@@ -15,10 +15,11 @@
 #include "include/signals.hpp"
 #include "include/scheduler.hpp"
 #include "include/playlist_scraper.hpp"
+#include "include/download.hpp"
 
 using namespace sf;
 
-int main() {
+int app() {
   if (!ensure_storage())
     return 1;
 
@@ -37,32 +38,35 @@ int main() {
   default_font.setSmooth(true);
 
 
-  sf::RenderWindow window_popup_rasterizing(sf::VideoMode({300, 100}), "Melodia - Rasterizing textures", sf::Style::None);
+  sf::RenderWindow window_popup_loading(sf::VideoMode({300, 100}), "Melodia - Loading", sf::Style::None);
   sf::Texture icon_tex;
   if (!icon_tex.loadFromImage(icon)) {
     throw std::runtime_error("Failed to load icon from image.\n");
   }
   sf::Sprite icon_sprite(icon_tex);
   icon_sprite.setPosition({
-    window_popup_rasterizing.getSize().x / 2 - icon_sprite.getGlobalBounds().size.x / 2,
-    window_popup_rasterizing.getSize().y - icon_sprite.getGlobalBounds().size.y - 2.f
+    window_popup_loading.getSize().x / 2 - icon_sprite.getGlobalBounds().size.x / 2,
+    window_popup_loading.getSize().y - icon_sprite.getGlobalBounds().size.y - 2.f
   });
-  sf::Text rasterizing_text(default_font, "Loading...");
-  rasterizing_text.setCharacterSize(24);
-  rasterizing_text.setFillColor(text_color);
-  rasterizing_text.setStyle(sf::Text::Bold);
-  rasterizing_text.setPosition({
-    window_popup_rasterizing.getSize().x / 2 - rasterizing_text.getGlobalBounds().size.x / 2,
-    window_popup_rasterizing.getSize().y / 2 - rasterizing_text.getGlobalBounds().size.y / 2 - 10.f
+  sf::Text loading_text(default_font, "Loading...");
+  loading_text.setCharacterSize(24);
+  loading_text.setFillColor(text_color);
+  loading_text.setStyle(sf::Text::Bold);
+  loading_text.setPosition({
+    window_popup_loading.getSize().x / 2 - loading_text.getGlobalBounds().size.x / 2,
+    window_popup_loading.getSize().y / 2 - loading_text.getGlobalBounds().size.y / 2 - 10.f
   });
-  window_popup_rasterizing.clear(sf::Color(background_color));
-  window_popup_rasterizing.draw(rasterizing_text);
-  window_popup_rasterizing.draw(icon_sprite);
-  window_popup_rasterizing.display();
+  window_popup_loading.clear(sf::Color(background_color));
+  window_popup_loading.draw(loading_text);
+  window_popup_loading.draw(icon_sprite);
+  window_popup_loading.display();
 
+  // Things that are done during loading
+
+  yt_dlp_path = find_yt_dlp(); // find yt-dlp on PATH and download if isn't found
   rasterize_textures(); // svg (./misc) -> png (./misc/rasters)
 
-  window_popup_rasterizing.close();
+  window_popup_loading.close();
 
   if (!window.resize(window_base_size)) {
     throw std::runtime_error("Failed to resize window render texture.");
@@ -72,8 +76,6 @@ int main() {
   std::setlocale(LC_ALL, "en_US.UTF-8");
 
   render_window.setIcon(icon.getSize(), icon.getPixelsPtr());
-
-  MenuData menu_data;
 
   switch_to_playlist_selector(menu_data); // Start as the playlist selector
   // switch_to_player(window, render_window, menu_data, "tmp");
@@ -140,6 +142,7 @@ int main() {
     while (const std::optional event = render_window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
         render_window.close();
+        cleanup();
       } else if (const auto* resized = event->getIf<sf::Event::Resized>()) {
         // On resize:
         // - set new view
@@ -503,5 +506,15 @@ int main() {
   }
 
   return 0;
+}
+
+int main() {
+  try {
+    return app();
+  } catch (...) {}
+
+  // An exception was thrown, try to cleanup
+  cleanup();
+  return 1;
 }
 

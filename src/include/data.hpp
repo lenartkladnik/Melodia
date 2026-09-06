@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <random>
 #include <chrono>
+#include <future>
 
 #include "utils.hpp"
 #include "drawformable.hpp"
@@ -19,14 +20,18 @@
 // Forward declarations
 class InputComponent;
 class AreaComponent;
+struct MenuData;
 
 // Constants
 
 extern bool dark_mode;
 
+extern std::string yt_dlp_path;
+
 extern const int ON_TOP; // Maximum z-index that is assumed to be on the top of everything else
 extern const size_t MAX_PAST_QUEUE_SIZE;
-extern const size_t NO_REPEAT_ZONE; // An song won't repeat for at least this many songs (if the number of songs is more than it)
+extern const size_t NO_REPEAT_ZONE; // A song won't repeat for at least this many songs (if the number of songs in the playlist is more than this value)
+extern const std::chrono::milliseconds MIN_AUTOCOMPLETE_RESPONSE_TIME; // If autocomplete API takes longer then this an empty list is returned
 
 extern const float padding_top;
 extern const float offset;
@@ -69,6 +74,8 @@ extern sf::RenderTexture window;
 extern sf::Vector2f window_size;
 extern sf::View default_view;
 extern bool is_fullscreen;
+
+extern MenuData menu_data;
 
 extern int global_z_index;
 
@@ -229,6 +236,11 @@ class MusicPlayer {
     }
 };
 
+struct AutocompleteResult {
+  std::string query;
+  std::vector<std::string> results;
+};
+
 struct StaticPlayerData {
   std::shared_ptr<InputComponent> search;
   std::optional<sf::Sprite> main_control;
@@ -294,6 +306,13 @@ struct StaticPlaylistSelectorData {
   DTCache drawables_cache;
   std::vector<std::unique_ptr<InputComponent>> playlist_names_cache;
   std::unique_ptr<AreaComponent> search_res_area;
+  std::shared_ptr<sf::Texture> remove_icon_tex;
+  std::optional<sf::Sprite> remove_icon;
+  std::shared_ptr<sf::Texture> remove_icon_hover_tex;
+  std::optional<sf::Sprite> remove_icon_hover;
+  sf::RoundedRectangleShape remove_area;
+  MultistateFuture<AutocompleteResult> autocomplete_mf;
+  std::u32string last_autocomplete_query;
 
   StaticPlaylistSelectorData() = default;
   ~StaticPlaylistSelectorData() = default;

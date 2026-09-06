@@ -21,9 +21,12 @@
 
 bool dark_mode = true;
 
+std::string yt_dlp_path;
+
 const int ON_TOP = 999;
 const size_t MAX_PAST_QUEUE_SIZE = 999;
 const size_t NO_REPEAT_ZONE = 3;
+const std::chrono::milliseconds MIN_AUTOCOMPLETE_RESPONSE_TIME = std::chrono::milliseconds(500);
 
 const float padding_top = 100.f;
 const float offset = 50.f;
@@ -72,11 +75,15 @@ sf::Vector2f window_size = {static_cast<float>(render_window.getSize().x), stati
 sf::View default_view = render_window.getDefaultView();
 bool is_fullscreen;
 
+MenuData menu_data;
+
 int global_z_index = 0;
 
 extern const std::unordered_map<std::string, sf::Vector2u> icon_sizes({
   {"volume", {30, 30}},
   {"trash", {26, 26}},
+  {"remove_area", {50, 50}},
+  {"remove_area_hover", {50, 50}},
   {"side_expand", {48, 48}},
   {"side_contract", {48, 48}},
   {"previous", {26, 26}},
@@ -182,7 +189,7 @@ void set_colors() {
     selection_color = {181, 215, 255};
   }
 
-  cancel_area_color = adjust_if_dark_mode({255, 0, 0, 20});
+  cancel_area_color = {245, 0, 0, 20};
 
   volume_slider_color = adjust_if_dark_mode({10, 10, 10});
 }
