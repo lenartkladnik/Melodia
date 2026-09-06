@@ -369,9 +369,7 @@ std::shared_ptr<StaticPlayerData> init_player(const std::string& song_path, int 
   return data;
 }
 
-void display_player() {
-  auto player = std::get<MenuData::PlayerData>(menu_data.data);
-
+void display_player(MenuData::PlayerData& player) {
   global_z_index = 0;
 
   auto& player_data = *player.data;

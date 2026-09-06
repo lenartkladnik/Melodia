@@ -464,7 +464,7 @@ int app() {
           player.reset_cursor = true;
         }
 
-        if (player.data) display_player();
+        if (player.data) display_player(player);
         else player.playing_song_id = -1; // Something went wrong re-init
 
       break;
