@@ -264,8 +264,12 @@ bool display_playlist_selector() {
     });
 
     float search_autocomplete_h = default_font.getLineSpacing(medium_font_size) * 2;
-    // if (playlist_sel.data->search->not_empty())
-    //   search_autocomplete_h = window_size.y * 0.1;
+
+    // If there is a result being dragged reset the search rounding and search_results_background_h
+    if (dragging_search_result != -1) {
+      playlist_sel.data->search->background_reset_corner_radii();
+      search_results_background_h = 0;
+    }
 
     sf::RoundedRectangleShape search_results_background({
       data.search->background_bounds().size.x,
@@ -299,12 +303,6 @@ bool display_playlist_selector() {
       search_results_background.getPosition().y + search_results_background.getGlobalBounds().size.y - suggest_song.getGlobalBounds().size.y - 10.f
     });
 
-    // If there is a result being dragged remove the background,
-    // but don't hide the background until the drag and drop is
-    // not considered unintentional
-    if (dragging_search_result != -1)
-      search_results_background_h = 0;
-
     can_search_string_scroll = true;
 
     if (playlist_sel.data->search->should_input_refresh()) {
@@ -332,8 +330,11 @@ bool display_playlist_selector() {
 
     new_scroll_event(scroll_events, "search_results_background", search_results_background.getGlobalBounds(), &playlist_sel_scroll, &can_search_string_scroll);
 
-    window.draw(search_results_background);
-    window.draw(suggest_song);
+    // Don't draw background if a result is being dragged
+    if (dragging_search_result == -1) {
+      window.draw(search_results_background);
+      window.draw(suggest_song);
+    }
 
     // Show search results
 

@@ -23,10 +23,11 @@ std::shared_ptr<StaticPlayerData> init_player(const std::string& song_path, int 
   auto third = (float)(window_size.x / 3);
 
   auto cover_size = third - offset;
+  auto cover_round = 16;
 
   // Big cover art above the player controls
 
-  sf::RoundedRectangleShape cover({cover_size, cover_size}, 8, main_n);
+  sf::RoundedRectangleShape cover({cover_size, cover_size}, cover_round, main_n);
 
   auto cover_texture = std::make_shared<sf::Texture>();
   if (!cover_texture->loadFromFile(song_path + ".png")) {
@@ -37,7 +38,7 @@ std::shared_ptr<StaticPlayerData> init_player(const std::string& song_path, int 
   cover.setTexture(cover_texture.get());
   cover.setPosition({half - cover.getGlobalBounds().size.x / 2, padding_top});
 
-  sf::RoundedRectangleShape cover_shadow({cover_size, cover_size}, in_round, main_n);
+  sf::RoundedRectangleShape cover_shadow({cover_size, cover_size}, cover_round, main_n);
   cover_shadow.setFillColor(background_shadow_color);
   cover_shadow.setPosition({cover.getPosition().x + shadow_offset, cover.getPosition().y + shadow_offset});
 
@@ -757,13 +758,13 @@ void done_playing(std::vector<int>& playlist, std::vector<int>& past_queue) {
 
   playlist.erase(playlist.begin());
 
-  if (playlist.size() <= NO_REPEAT_ZONE) {
-    playlist.push_back(id);
-  }
-  else {
-    std::uniform_int_distribution<> distr(NO_REPEAT_ZONE, playlist.size() - queue_items - 1);
-    playlist.insert(playlist.begin() + NO_REPEAT_ZONE + distr(rand_generator), id);
-  }
+  // if (playlist.size() <= NO_REPEAT_ZONE) {
+  playlist.push_back(id);
+  // }
+  // else {
+  //   std::uniform_int_distribution<> distr(NO_REPEAT_ZONE, playlist.size() - 1);
+  //   playlist.insert(playlist.begin() + NO_REPEAT_ZONE + distr(rand_generator), id);
+  // }
 }
 
 int get_start_song(std::vector<int>& playlist) {
