@@ -15,13 +15,7 @@ var doLoop = false;
 
 final waitWidget = const Center(child: CircularProgressIndicator());
 final nullWidget = const SizedBox.shrink();
-
-bool doWaitForFuture(AsyncSnapshot snapshot) {
-  if (snapshot.connectionState == ConnectionState.waiting || snapshot.hasError) {
-    return true;
-  }
-  return false;
-}
+Widget errorWidget(VoidCallback callback) {return Center(child: IconButton(onPressed: callback, tooltip: "Retry", iconSize: 32, icon: const Icon(Icons.refresh_rounded)));}
 
 double textWidth(BuildContext context, String text, TextStyle style) {
   final painter = TextPainter(
@@ -161,13 +155,23 @@ class PlaylistSelectorWidget extends StatefulWidget {
 class _PlaylistSelectorWidgetState extends State<PlaylistSelectorWidget> {
   Future<List<String>> allPlaylistsFuture = fetchAllPlaylists(); 
 
+  void _retryAllPlaylistsFuture() {
+    setState(() {
+      allPlaylistsFuture = fetchAllPlaylists();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
       future: allPlaylistsFuture,
       builder: (context, snapshot) {
-        if (doWaitForFuture(snapshot)) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return waitWidget;
+        }
+
+        if (snapshot.hasError) {
+          return errorWidget(_retryAllPlaylistsFuture);
         }
         
         List<String>? playlists = snapshot.data;
@@ -177,12 +181,22 @@ class _PlaylistSelectorWidgetState extends State<PlaylistSelectorWidget> {
 
         List<FutureBuilder> playlistItems = [];
         for (var playlistName in playlists) {
+          Future<Playlist> playlistFuture = fetchPlaylist(playlistName);
+          void retryPlaylistFuture() {
+            setState(() {
+              playlistFuture = fetchPlaylist(playlistName);
+            });
+          }
           playlistItems.add(
             FutureBuilder(
-              future: fetchPlaylist(playlistName),
+              future: playlistFuture,
               builder:(context, snapshot) {
-                if (doWaitForFuture(snapshot)) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return waitWidget;
+                }
+
+                if (snapshot.hasError) {
+                  errorWidget(retryPlaylistFuture);
                 }
 
                 final playlistData = snapshot.data;
@@ -312,9 +326,10 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             onFR: audioHandler.skipToPrevious,
             onFF: audioHandler.skipToNext,
             close: close,
+            toFull: () => widget.controller?.toFullPlayer(),
             isMini: miniPlayer,
           ),
-          !miniPlayer ? PlayerSideMenu(playlistName: now.playlist, playlistIndex: now.index) : nullWidget,
+          if (!miniPlayer) PlayerSideMenu(playlistName: now.playlist, playlistIndex: now.index),
         ]);
       },
     );
@@ -669,7 +684,11 @@ class SongListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(future: fetchSong(songId), builder: (context, snapshot) {
-      if (doWaitForFuture(snapshot)) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return waitWidget;
+      }
+
+      if (snapshot.hasError) {
         return waitWidget;
       }
 
@@ -739,6 +758,12 @@ class _PlayerSideMenuState extends State<PlayerSideMenu> {
     super.initState();
   }
 
+  void _retryPlaylistDataFuture() {
+    setState(() {
+      playlistDataFuture = fetchPlaylist(widget.playlistName);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final expandedMenu = Container(
@@ -771,8 +796,12 @@ class _PlayerSideMenuState extends State<PlayerSideMenu> {
               builder:(context, snapshot) {
                 List<Widget> menuItems = [];
   
-                if (doWaitForFuture(snapshot)) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return waitWidget;
+                }
+
+                if (snapshot.hasError) {
+                  return errorWidget(_retryPlaylistDataFuture);
                 }
 
                 final playlistItems = snapshot.data;
@@ -781,7 +810,11 @@ class _PlayerSideMenuState extends State<PlayerSideMenu> {
                 for (int i = 0; i < 10; i++) {
                   menuItems.add(
                     FutureBuilder(future: fetchNextSongId(widget.playlistName, i + widget.playlistIndex), builder:(context, snapshot) {
-                      if (doWaitForFuture(snapshot)) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return waitWidget;
+                      }
+
+                      if (snapshot.hasError) {
                         return waitWidget;
                       }
 
@@ -832,9 +865,10 @@ class Player extends StatefulWidget {
   final VoidCallback onFR;
   final VoidCallback onFF;
   final VoidCallback close;
+  final VoidCallback toFull;
   final bool isMini;
 
-  const new({super.key, required this.song, required this.onFR, required this.onFF, required this.close, required this.isMini});
+  const new({super.key, required this.song, required this.onFR, required this.onFF, required this.close, required this.toFull, required this.isMini});
 
   @override
   State<Player> createState() => _PlayerState();
@@ -857,112 +891,115 @@ class _PlayerState extends State<Player> {
   Widget build(BuildContext context) {
     double imageSize;
     double waveformSize;
-    double imageRoundness;
     
     final size = MediaQuery.sizeOf(context);
     final smallerSize = min(size.width, size.height);
     if (widget.isMini) {
       imageSize = 80;
       waveformSize = smallerSize * 0.5;
-      imageRoundness = 5;
     } else {
       imageSize = smallerSize * 0.5;
       waveformSize = smallerSize * 0.5;
-      imageRoundness = 16;
     }
+
+    double minImageSize = imageSize / 2;
 
     final content = Center(
       child: Builder(builder: (context) {
         final song = widget.song;
 
-        final image = Container(
-          width: imageSize,
-          height: imageSize,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(imageRoundness),
-            boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 6)),
-            ],
-            image: DecorationImage(
-              image: NetworkImage("$apiUrl${song.image}"),
-              fit: BoxFit.cover,
+        Container image(size) {
+          return Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(size / 10),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 6)),
+              ],
+              image: DecorationImage(
+                image: NetworkImage("$apiUrl${song.image}"),
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-        );
+          );
+        }
 
-        final progressAndControls = StreamBuilder<Duration?>(
-          stream: player.durationStream,
-          builder: (context, durSnap) {
-            final duration = durSnap.data ?? Duration.zero;
-            return StreamBuilder<Duration>(
-              stream: player.positionStream,
-              builder: (context, posSnap) {
-                Duration position;
-                if (!_isSeeking) {
-                  position = posSnap.data ?? Duration.zero;
-                } else {
-                  position = duration * _seekingPos;
-                }
-                final progress = duration.inMilliseconds == 0
-                    ? 0.0
-                    : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+        StreamBuilder progressAndControls(justifyLeft) {
+          return StreamBuilder<Duration?>(
+            stream: player.durationStream,
+            builder: (context, durSnap) {
+              final duration = durSnap.data ?? Duration.zero;
+              return StreamBuilder<Duration>(
+                stream: player.positionStream,
+                builder: (context, posSnap) {
+                  Duration position;
+                  if (!_isSeeking) {
+                    position = posSnap.data ?? Duration.zero;
+                  } else {
+                    position = duration * _seekingPos;
+                  }
+                  final progress = duration.inMilliseconds == 0
+                      ? 0.0
+                      : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
 
-                const timeWidth = 60.0;
+                  const timeWidth = 60.0;
 
-                final remaining = duration - position;
-                final minutes = remaining.inMinutes;
-                final seconds = (remaining.inSeconds % 60).toString().padLeft(2, '0');
+                  final remaining = duration - position;
+                  final minutes = remaining.inMinutes;
+                  final seconds = (remaining.inSeconds % 60).toString().padLeft(2, '0');
 
-                return Column(mainAxisSize: MainAxisSize.min, children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(width: timeWidth), // mirrors the text width so the waveform stays centered
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTapDown:(details) {
-                          _visualSeek(details.localPosition.dx, waveformSize);
-                        },
-                        onHorizontalDragStart: (details) {
-                          _visualSeek(details.localPosition.dx, waveformSize);
-                        },
-                        onHorizontalDragUpdate: (details) {
-                          _visualSeek(details.localPosition.dx, waveformSize);
-                        },
-                        onHorizontalDragEnd: (details) {
-                          final seekPos = (details.localPosition.dx / waveformSize).clamp(0.0, 1.0);
-                          player.seek((player.duration ?? Duration.zero) * seekPos);
-                          setState(() {
-                            _isSeeking = false;
-                          });
-                          player.play();
-                        },
-                        child: CustomPaint(
-                          size: Size(waveformSize, 30),
-                          painter: WaveformProgress(progress),
-                        )
-                      ),
-                      SizedBox(
-                        width: timeWidth,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Text("$minutes:$seconds"),
+                  return Column(mainAxisSize: MainAxisSize.min, children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (justifyLeft) const SizedBox(width: timeWidth), // mirrors the text width so the waveform stays centered
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapDown:(details) {
+                            _visualSeek(details.localPosition.dx, waveformSize);
+                          },
+                          onHorizontalDragStart: (details) {
+                            _visualSeek(details.localPosition.dx, waveformSize);
+                          },
+                          onHorizontalDragUpdate: (details) {
+                            _visualSeek(details.localPosition.dx, waveformSize);
+                          },
+                          onHorizontalDragEnd: (details) {
+                            final seekPos = (details.localPosition.dx / waveformSize).clamp(0.0, 1.0);
+                            player.seek((player.duration ?? Duration.zero) * seekPos);
+                            setState(() {
+                              _isSeeking = false;
+                            });
+                            player.play();
+                          },
+                          child: CustomPaint(
+                            size: Size(waveformSize, 30),
+                            painter: WaveformProgress(progress),
+                          )
                         ),
-                      ),
-                    ],
-                  ),
-                  MediaController(player: player, onFR: widget.onFR, onFF: widget.onFF, isSeeking: _isSeeking, isMini: widget.isMini),
-                ]);
-              },
-            );
-          },
-        );
+                        SizedBox(
+                          width: timeWidth,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Text("$minutes:$seconds"),
+                          ),
+                        ),
+                      ],
+                    ),
+                    MediaController(player: player, onFR: widget.onFR, onFF: widget.onFF, isSeeking: _isSeeking, isMini: widget.isMini),
+                  ]);
+                },
+              );
+            },
+          );
+        }
 
         if (widget.isMini) {
           return LayoutBuilder(builder:(context, constraints) {
             final double textSize = 14;
             const paddings = 10.0 + 8.0 + 8.0 + 50.0;
-            const minTextVisible = 0.7; // minium percentage of text that should be visible
+            const textGap = 65;
 
             final style = DefaultTextStyle.of(context).style;
             style.merge(TextStyle(fontSize: 14));
@@ -973,49 +1010,73 @@ class _PlayerState extends State<Player> {
             final textAvailable = ((constraints.maxWidth - waveformSize) / 2) - imageSize - paddings;
 
             bool isNarrow = false;
-            if (textAvailable < (textCalculated * minTextVisible)) {
+            bool isVeryNarrow = false;
+            
+            if (textAvailable < textCalculated) {
               isNarrow = true;
+
+              final narrowImageSize = min(imageSize, (constraints.maxWidth - waveformSize - paddings - textCalculated - textGap));
+              imageSize = narrowImageSize;
             }
+
+            if (imageSize < minImageSize) {
+              isVeryNarrow = true;
+              imageSize = minImageSize;
+            }
+
+            final titleArtistText = Expanded(
+              child: Column(
+                mainAxisAlignment: isVeryNarrow ? MainAxisAlignment.center : MainAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: isVeryNarrow ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isVeryNarrow ? "  ${song.title}" : song.title, // Add a bit of space on the left to prevent clipping out of screen on phones
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: textSize),
+                  ),
+                  Text(
+                    isVeryNarrow ? "  ${song.artist}" : song.artist, // Add a bit of space on the left to prevent clipping out of screen on phones
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: textSize, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
 
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        SizedBox(width: 10),
-                        image,
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                song.title,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: textSize),
-                              ),
-                              Text(
-                                song.artist,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: textSize, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        )
-                      ],
-                    )
+                  child: GestureDetector(
+                    onTap: widget.toFull,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: isVeryNarrow ?
+                      Column(
+                        children: [
+                          SizedBox(height: 8, width: 10),
+                          image(imageSize),
+                          titleArtistText
+                        ],
+                      )
+                      :
+                      Row(
+                        children: [
+                          SizedBox(width: 10),
+                          image(imageSize),
+                          SizedBox(width: 8),
+                          titleArtistText
+                        ],
+                      )
+                    ),
                   ),
                 ),
                 Align(
                   alignment: AlignmentGeometry.bottomCenter,
-                  child: progressAndControls
+                  child: progressAndControls(!isNarrow)
                 ),
-                !isNarrow ? Expanded(child: SizedBox.shrink()) : nullWidget
+                if(!isNarrow) Expanded(child: SizedBox.shrink())
               ],
             );
           });
@@ -1024,9 +1085,9 @@ class _PlayerState extends State<Player> {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            image,
+            image(imageSize),
             SizedBox(height: 10),
-            progressAndControls,
+            progressAndControls(true),
             SizedBox(height: 10),
             Text(
               song.title,
