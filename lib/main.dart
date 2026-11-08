@@ -9,13 +9,72 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 final apiUrl = "http://lenart:5400";
+
 var shuffleSeed = Random().nextInt(1024);
 var doShuffle = true;
 var doLoop = false;
+List<Future<String> Function()> determinedQueue = [() async {return "13";}];
+int generatedQueueStart = 0;
+
+Future<String> getSongAt(String playlist, int index, {int offset = 0}) {
+  if (index + offset < determinedQueue.length) {
+    return determinedQueue[index + offset]();
+  }
+
+  return fetchNextSongId(playlist, generatedQueueStart + index + offset);
+}
 
 final waitWidget = const Center(child: CircularProgressIndicator());
 final nullWidget = const SizedBox.shrink();
 Widget errorWidget(VoidCallback callback) {return Center(child: IconButton(onPressed: callback, tooltip: "Retry", iconSize: 32, icon: const Icon(Icons.refresh_rounded)));}
+
+Widget songListItemSkeleton(BuildContext context) {
+  return Material(type: MaterialType.transparency, child:
+    Container(
+      height: 120,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Theme.of(context).colorScheme.surfaceContainerLow
+      ),
+      child:
+        Row(children: [
+          SizedBox(width: 10),
+          Container(
+            width: 100,
+            height: 100, 
+            decoration: BoxDecoration(
+              color: Color.fromARGB(10, 0, 0, 0),
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          SizedBox(width: 10),
+          SizedBox(
+            width: 300,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Container(
+                width: 240,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(10, 0, 0, 0),
+                  borderRadius: BorderRadius.circular(8)
+                ),
+              ),
+              SizedBox(height: 10),
+              Container(
+                width: 190,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(10, 0, 0, 0),
+                  borderRadius: BorderRadius.circular(8)
+                ),
+              ),
+            ])
+          ),
+          SizedBox(width: 2)
+        ]),
+    )
+  );
+}
 
 double textWidth(BuildContext context, String text, TextStyle style) {
   final painter = TextPainter(
@@ -118,6 +177,17 @@ Future<List<String>> fetchAllPlaylists() async {
 
   final response = await http.get(uri);
   return (jsonDecode(response.body) as List<dynamic>).cast<String>();
+}
+
+Future<int> fetchPlaylistSize(String playlist) async {
+  final uri = Uri.parse("$apiUrl/playlist/size").replace(
+    queryParameters: {
+      "playlist_name": playlist
+    }
+  );
+
+  final response = await http.get(uri);
+  return jsonDecode(response.body)["size"] as int;
 }
 
 class Playlist {
@@ -443,7 +513,7 @@ class AudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Future<Song?> _resolve(String playlist, int index) async {
-    final id = await fetchNextSongId(playlist, index).timeout(const Duration(seconds: 15));
+    final id = await getSongAt(playlist, index).timeout(const Duration(seconds: 15));
     return fetchSong(id).timeout(const Duration(seconds: 15));
   }
 
@@ -685,11 +755,11 @@ class SongListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return FutureBuilder(future: fetchSong(songId), builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
-        return waitWidget;
+        return songListItemSkeleton(context);
       }
 
       if (snapshot.hasError) {
-        return waitWidget;
+        return songListItemSkeleton(context);
       }
 
       final song = snapshot.data;
@@ -794,8 +864,6 @@ class _PlayerSideMenuState extends State<PlayerSideMenu> {
             FutureBuilder(
               future: playlistDataFuture,
               builder:(context, snapshot) {
-                List<Widget> menuItems = [];
-  
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return waitWidget;
                 }
@@ -807,29 +875,45 @@ class _PlayerSideMenuState extends State<PlayerSideMenu> {
                 final playlistItems = snapshot.data;
                 if (playlistItems == null) return waitWidget;
 
-                for (int i = 0; i < 10; i++) {
-                  menuItems.add(
-                    FutureBuilder(future: fetchNextSongId(widget.playlistName, i + widget.playlistIndex), builder:(context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return waitWidget;
-                      }
+                return FutureBuilder(
+                  future: fetchPlaylistSize(widget.playlistName),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return waitWidget;
+                    }
 
-                      if (snapshot.hasError) {
-                        return waitWidget;
-                      }
+                    if (snapshot.hasError) {
+                      return waitWidget;
+                    }
 
-                      final songId = snapshot.data;
-                      if (songId == null) {
-                        return waitWidget;
-                      }
-                      
-                      return SongListItem(songId: songId);
-                    })
-                  );
-                  menuItems.add(SizedBox(height: 10));
-                }
-                
-                return Column(children: menuItems);
+                    final playlistSize = snapshot.data;
+                    if (playlistSize == null) return waitWidget;
+
+                    return Expanded(
+                      child: ListView.builder(
+                        itemCount: playlistSize,
+                        itemBuilder:(context, index) {
+                          return FutureBuilder(future: getSongAt(widget.playlistName, widget.playlistIndex, offset: index), builder:(context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return songListItemSkeleton(context);
+                            }
+
+                            if (snapshot.hasError) {
+                              return songListItemSkeleton(context);
+                            }
+
+                            final songId = snapshot.data;
+                            if (songId == null) {
+                              return songListItemSkeleton(context);
+                            }
+                            
+                            return SongListItem(songId: songId);
+                          });
+                        }
+                      )
+                    );
+                  },
+                );
               }
             )
           ])
