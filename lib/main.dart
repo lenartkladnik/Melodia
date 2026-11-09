@@ -14,7 +14,7 @@ const String endOfPlaylistMessage = "end_of_playlist";
 
 var shuffleSeed = Random().nextInt(1024);
 var doShuffle = true;
-var doLoop = false;
+var doLoop = true;
 
 List<String> determinedQueue = ["13", "42", "312"];
 
@@ -616,11 +616,13 @@ class MelodiaAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Future<void> loadPlaylist(String name) async {
-    if (name == _playlist && nowPlaying.value != null) return;
+    if (name == _playlist && nowPlaying.value != null) return; // If the playlist currently playing is clicked don't reset state instead only open the player
 
     _playlist = name;
     _index = 0;
     _invalidatePrefetch();
+
+    shuffleSeed = Random().nextInt(1024); // New order
 
     alreadyPlayed = [];
     alreadyPlayedFromQueue = [];
