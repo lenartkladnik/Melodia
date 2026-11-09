@@ -1,27 +1,41 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
-final apiUrl = "http://lenart:5400";
+const apiUrl = "http://lenart:5400";
 
 var shuffleSeed = Random().nextInt(1024);
 var doShuffle = true;
 var doLoop = false;
-List<Future<String> Function()> determinedQueue = [() async {return "13";}];
+
+List<String> determinedQueue = ["13", "42", "312"];
+
+List<String> alreadyPlayed = [];
+List<bool> alreadyPlayedFromQueue = [];
+
+int playedFromQueueCount = 0;
 int generatedQueueStart = 0;
 
-Future<String> getSongAt(String playlist, int index, {int offset = 0}) {
-  if (index + offset < determinedQueue.length) {
-    return determinedQueue[index + offset]();
-  }
+int playlistPositionAfter(int currentIndex, int n) => generatedQueueStart + currentIndex - playedFromQueueCount + n;
 
-  return fetchNextSongId(playlist, generatedQueueStart + index + offset);
+Future<String> getSongToBeDisplayed(String playlist, int currentIndex, int offset) {
+  assert(offset >= 1);
+  final queued = determinedQueue.length;
+  if (offset <= queued) return Future.value(determinedQueue[offset - 1]);
+
+  return fetchNextSongId(playlist, playlistPositionAfter(currentIndex, offset - queued));
+}
+
+Future<String> getSongToBePlayed(String playlist, int targetIndex) {
+  if (determinedQueue.isNotEmpty) return Future.value(determinedQueue.first);
+
+  return fetchNextSongId(playlist, playlistPositionAfter(targetIndex - 1, 1));
 }
 
 final waitWidget = const Center(child: CircularProgressIndicator());
@@ -48,29 +62,32 @@ Widget songListItemSkeleton(BuildContext context) {
             ),
           ),
           SizedBox(width: 10),
-          SizedBox(
-            width: 300,
+          Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Container(
-                width: 240,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: Color.fromARGB(10, 0, 0, 0),
-                  borderRadius: BorderRadius.circular(8)
+              FractionallySizedBox(
+                widthFactor: 0.8,
+                child: Container(
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Color.fromARGB(10, 0, 0, 0),
+                    borderRadius: BorderRadius.circular(8)
+                  ),
                 ),
               ),
               SizedBox(height: 10),
-              Container(
-                width: 190,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: Color.fromARGB(10, 0, 0, 0),
-                  borderRadius: BorderRadius.circular(8)
+              FractionallySizedBox(
+                widthFactor: 0.6,
+                child: Container(
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Color.fromARGB(10, 0, 0, 0),
+                    borderRadius: BorderRadius.circular(8)
+                  ),
                 ),
               ),
             ])
           ),
-          SizedBox(width: 2)
+          SizedBox(width: 8)
         ]),
     )
   );
@@ -86,23 +103,28 @@ double textWidth(BuildContext context, String text, TextStyle style) {
   return painter.width;
 }
 
-late final AudioHandler audioHandler;
+late final MelodiaAudioHandler audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  JustAudioMediaKit.ensureInitialized();
+  if (!kIsWeb) JustAudioMediaKit.ensureInitialized();
 
-  if (Platform.isLinux || Platform.isWindows) {
-    audioHandler = AudioHandler();
-  } else {
-    audioHandler = await AudioService.init(
-      builder: () => AudioHandler(),
+  final useAudioService = !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+       defaultTargetPlatform == TargetPlatform.iOS ||
+       defaultTargetPlatform == TargetPlatform.macOS);
+
+  if (useAudioService) {
+    audioHandler = await AudioService.init<MelodiaAudioHandler>(
+      builder: () => MelodiaAudioHandler(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: "com.lenartkladnik.melodia.playback",
         androidNotificationChannelName: "Melodia playback",
         androidNotificationOngoing: true,
       ),
     );
+  } else {
+    audioHandler = MelodiaAudioHandler();
   }
 
   runApp(const Melodia());
@@ -157,8 +179,24 @@ class _MelodiaState extends State<Melodia> {
   }
 }
 
+class PlaylistEnd implements Exception {
+  @override
+  String toString() => "End of playlist";
+}
+
+Future<dynamic> _getJson(Uri uri, {bool notFoundIsNull = false}) async {
+  final response = await http.get(uri).timeout(const Duration(seconds: 15));
+  if (notFoundIsNull && response.statusCode == 404) return null;
+  if (response.statusCode != 200) {
+    throw http.ClientException("HTTP ${response.statusCode}", uri);
+  }
+  return jsonDecode(utf8.decode(response.bodyBytes));
+}
+
 Future<String> fetchNextSongId(String playlist, int index) async {
-  final uri = Uri.parse("$apiUrl/playlist/next").replace(
+  if (index < 0) throw PlaylistEnd();
+
+  final json = await _getJson(Uri.parse("$apiUrl/playlist/next").replace(
     queryParameters: {
       "playlist_name": playlist,
       "index": index.toString(),
@@ -166,28 +204,23 @@ Future<String> fetchNextSongId(String playlist, int index) async {
       "seed": shuffleSeed.toString(),
       "loop": doLoop.toString()
     }
-  );
+  ));
 
-  final response = await http.get(uri);
-  return jsonDecode(response.body)["song_id"].toString();
+  final id = json is Map ? json["song_id"] : null;
+  if (id == null) throw PlaylistEnd();
+  return id.toString();
 }
 
 Future<List<String>> fetchAllPlaylists() async {
-  final uri = Uri.parse("$apiUrl/playlists");
-
-  final response = await http.get(uri);
-  return (jsonDecode(response.body) as List<dynamic>).cast<String>();
+  final json = await _getJson(Uri.parse("$apiUrl/playlists"));
+  return (json as List<dynamic>).cast<String>();
 }
 
 Future<int> fetchPlaylistSize(String playlist) async {
-  final uri = Uri.parse("$apiUrl/playlist/size").replace(
-    queryParameters: {
-      "playlist_name": playlist
-    }
-  );
-
-  final response = await http.get(uri);
-  return jsonDecode(response.body)["size"] as int;
+  final json = await _getJson(Uri.parse("$apiUrl/playlist/size").replace(
+    queryParameters: {"playlist_name": playlist}
+  ));
+  return json["size"] as int;
 }
 
 class Playlist {
@@ -205,12 +238,10 @@ class Playlist {
 }
 
 Future<Playlist> fetchPlaylist(String playlist) async {
-  final uri = Uri.parse("$apiUrl/playlist").replace(
+  final json = await _getJson(Uri.parse("$apiUrl/playlist").replace(
     queryParameters: {"playlist_name": playlist}
-  );
-
-  final response = await http.get(uri);
-  return Playlist.fromJson(jsonDecode(response.body));
+  ));
+  return Playlist.fromJson(json);
 }
 
 class PlaylistSelectorWidget extends StatefulWidget {
@@ -223,11 +254,22 @@ class PlaylistSelectorWidget extends StatefulWidget {
 }
 
 class _PlaylistSelectorWidgetState extends State<PlaylistSelectorWidget> {
-  Future<List<String>> allPlaylistsFuture = fetchAllPlaylists(); 
+  Future<List<String>> allPlaylistsFuture = fetchAllPlaylists();
+  final Map<String, Future<Playlist>> _playlistFutures = {};
+
+  Future<Playlist> _futureFor(String name) =>
+      _playlistFutures.putIfAbsent(name, () => fetchPlaylist(name));
 
   void _retryAllPlaylistsFuture() {
     setState(() {
+      _playlistFutures.clear();
       allPlaylistsFuture = fetchAllPlaylists();
+    });
+  }
+
+  void _retryPlaylist(String name) {
+    setState(() {
+      _playlistFutures[name] = fetchPlaylist(name);
     });
   }
 
@@ -249,24 +291,19 @@ class _PlaylistSelectorWidgetState extends State<PlaylistSelectorWidget> {
 
         final eachSize = 300;
 
-        List<FutureBuilder> playlistItems = [];
+        List<Widget> playlistItems = [];
         for (var playlistName in playlists) {
-          Future<Playlist> playlistFuture = fetchPlaylist(playlistName);
-          void retryPlaylistFuture() {
-            setState(() {
-              playlistFuture = fetchPlaylist(playlistName);
-            });
-          }
           playlistItems.add(
-            FutureBuilder(
-              future: playlistFuture,
+            FutureBuilder<Playlist>(
+              key: ValueKey(playlistName),
+              future: _futureFor(playlistName),
               builder:(context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return waitWidget;
                 }
 
                 if (snapshot.hasError) {
-                  errorWidget(retryPlaylistFuture);
+                  return errorWidget(() => _retryPlaylist(playlistName));
                 }
 
                 final playlistData = snapshot.data;
@@ -329,7 +366,7 @@ class _PlaylistSelectorWidgetState extends State<PlaylistSelectorWidget> {
                       ]
                     ),
                     SizedBox(height: 20),
-                    Column(children: playlistItems)
+                    Expanded(child: ListView(children: playlistItems))
                   ]
                 )
               )
@@ -367,13 +404,24 @@ class _PlayerWidgetState extends State<PlayerWidget> {
   void initState() {
     super.initState();
     widget.controller?._state = this;
+    audioHandler.loadError.addListener(_onLoadError);
+  }
+
+  void _onLoadError() {
+    final message = audioHandler.loadError.value;
+    if (message == null || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _setMini(bool mini) => setState(() {miniPlayer = mini;});
 
-  void _setPlaylist(String newPlaylist) {
+  Future<void> _setPlaylist(String newPlaylist) async {
     setState(() {requested = true;});
-    audioHandler.loadPlaylist(newPlaylist);
+    try {
+      await audioHandler.loadPlaylist(newPlaylist);
+    } finally {
+      if (mounted) setState(() {requested = false;});
+    }
   }
 
   @override
@@ -399,7 +447,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             toFull: () => widget.controller?.toFullPlayer(),
             isMini: miniPlayer,
           ),
-          if (!miniPlayer) PlayerSideMenu(playlistName: now.playlist, playlistIndex: now.index),
+          if (!miniPlayer) PlayerSideMenu(nowPlaying: now.song.id, playlistName: now.playlist, playlistIndex: now.index),
         ]);
       },
     );
@@ -407,6 +455,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
 
   @override
   void dispose() {
+    audioHandler.loadError.removeListener(_onLoadError);
     widget.controller?._state = null;
     super.dispose();
   }
@@ -419,6 +468,7 @@ class Song {
   final String image;
   final String thumbnail;
   final String title;
+  final String id;
 
   new({
     required this.artist,
@@ -427,9 +477,10 @@ class Song {
     required this.image,
     required this.thumbnail,
     required this.title,
+    required this.id,
   });
   
-  factory Song.fromJson(Map<String, dynamic> json) {
+  factory Song.fromJsonWithId(Map<String, dynamic> json, String id) {
     return Song(
       artist: json['artist'] as String,
       audio: json['audio'] as String,
@@ -437,21 +488,34 @@ class Song {
       image: json['image'] as String,
       thumbnail: json['thumbnail'] as String,
       title: json['title'] as String,
+      id: id,
     );
   }
 }
 
-Future<Song?> fetchSong(String id) async {
-  final uri = Uri.parse("$apiUrl/song").replace(
-    queryParameters: {"song_id": id},
-  );
-  final response = await http.get(uri);
+final Map<String, Future<Song?>> _songCache = {};
 
-  if (jsonDecode(response.body).isEmpty) {
+Future<Song?> fetchSong(String id) {
+  final cached = _songCache[id];
+  if (cached != null) return cached;
+
+  final future = _fetchSong(id);
+  _songCache[id] = future;
+  future.catchError((Object _) {
+    _songCache.remove(id);
     return null;
-  }
+  });
+  return future;
+}
 
-  return Song.fromJson(jsonDecode(response.body));
+Future<Song?> _fetchSong(String id) async {
+  final json = await _getJson(
+    Uri.parse("$apiUrl/song").replace(queryParameters: {"song_id": id}),
+    notFoundIsNull: true,
+  );
+
+  if (json == null || json is! Map || json.isEmpty) return null; // song doesn't exist
+  return Song.fromJsonWithId(Map<String, dynamic>.from(json), id);
 }
 
 class NowPlaying {
@@ -462,20 +526,27 @@ class NowPlaying {
   const NowPlaying(this.playlist, this.index, this.song);
 }
 
-class AudioHandler extends BaseAudioHandler with SeekHandler {
+class MelodiaAudioHandler extends BaseAudioHandler with SeekHandler {
+  static const _maxAttempts = 3;
+  static const _maxSkips = 5;
+  static const _maxHistory = 100;
+
   final AudioPlayer player = AudioPlayer();
   final ValueNotifier<NowPlaying?> nowPlaying = ValueNotifier<NowPlaying?>(null);
+
+  final ValueNotifier<String?> loadError = ValueNotifier<String?>(null);
 
   String? _playlist;
   int _index = 0;
   int _loadToken = 0;
+  bool _handlingCompletion = false;
 
   Future<Song?>? _next;
   String? _nextPlaylist;
   int? _nextIndex;
 
-  AudioHandler() {
-    _init();
+  MelodiaAudioHandler() {
+    _init().catchError((e){});
   }
 
   Future<void> _init() async {
@@ -491,16 +562,38 @@ class AudioHandler extends BaseAudioHandler with SeekHandler {
       }
     });
 
-    player.processingStateStream.listen((state) {
-      if (state == ProcessingState.completed) {
-        skipToNext();
+    player.processingStateStream.listen((state) async {
+      if (state != ProcessingState.completed || _handlingCompletion) return;
+      _handlingCompletion = true;
+      try {
+        await skipToNext();
+      } finally {
+        _handlingCompletion = false;
       }
     });
 
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
-    } finally {}
+    } catch (e) {
+      debugPrint("Audio session setup failed: $e");
+    }
+  }
+
+  void setShuffle(bool value) {
+    doShuffle = value;
+    _invalidatePrefetch();
+  }
+
+  void setLoop(bool value) {
+    doLoop = value;
+    _invalidatePrefetch();
+  }
+
+  void _invalidatePrefetch() {
+    _next = null;
+    _nextPlaylist = null;
+    _nextIndex = null;
   }
 
   Future<void> loadPlaylist(String name) async {
@@ -508,21 +601,63 @@ class AudioHandler extends BaseAudioHandler with SeekHandler {
 
     _playlist = name;
     _index = 0;
-    _next = null;
+    _invalidatePrefetch();
+
+    alreadyPlayed = [];
+    alreadyPlayedFromQueue = [];
+    playedFromQueueCount = 0;
+    generatedQueueStart = 0;
+
     await _playIndex(0);
   }
 
+  void _onSongStarted(Song song, {required bool replay}) {
+    if (replay) {
+      if (alreadyPlayed.length > 1) {
+        final leftId = alreadyPlayed.removeLast();
+        final leftFromQueue = alreadyPlayedFromQueue.removeLast();
+        if (leftFromQueue) {
+          determinedQueue.insert(0, leftId);
+          playedFromQueueCount--;
+        }
+      }
+      return;
+    }
+
+    final fromQueue = determinedQueue.isNotEmpty && determinedQueue.first == song.id;
+    if (fromQueue) {
+      determinedQueue.removeAt(0);
+      playedFromQueueCount++;
+    }
+
+    alreadyPlayed.add(song.id);
+    alreadyPlayedFromQueue.add(fromQueue);
+    if (alreadyPlayed.length > _maxHistory) {
+      alreadyPlayed.removeAt(0);
+      alreadyPlayedFromQueue.removeAt(0);
+    }
+  }
+
   Future<Song?> _resolve(String playlist, int index) async {
-    final id = await getSongAt(playlist, index).timeout(const Duration(seconds: 15));
-    return fetchSong(id).timeout(const Duration(seconds: 15));
+    while (true) {
+      final id = await getSongToBePlayed(playlist, index).timeout(const Duration(seconds: 15));
+      final song = await fetchSong(id).timeout(const Duration(seconds: 15));
+
+      if (song == null && determinedQueue.isNotEmpty && determinedQueue.first == id) {
+        determinedQueue.removeAt(0);
+        continue;
+      }
+      return song;
+    }
   }
 
   Future<Song?> _songFor(String playlist, int index) async {
     final cached = _next;
     if (cached != null && _nextPlaylist == playlist && _nextIndex == index) {
+      _next = null;
       try {
         return await cached;
-      } finally {}
+      } catch (_) {}
     }
     return _resolve(playlist, index);
   }
@@ -530,27 +665,54 @@ class AudioHandler extends BaseAudioHandler with SeekHandler {
   void _prefetch(String playlist, int index) {
     _nextPlaylist = playlist;
     _nextIndex = index;
-    _next = _resolve(playlist, index)..ignore();
+    final future = _resolve(playlist, index);
+    future.ignore();
+    _next = future;
   }
 
-  Future<void> _playIndex(int index) async {
+  Future<void> _playIndex(int index, {String? replayId}) async {
     final playlist = _playlist;
     if (playlist == null || index < 0) return;
 
     final token = ++_loadToken;
+    loadError.value = null;
 
-    while (true) {
+    Song? song;
+    var attempts = 0;
+    var skipped = 0;
+    while (song == null) {
       try {
-        Song? song;
-        while (song == null) {
-          song = await _songFor(playlist, index);
-          if (token != _loadToken) return;
-          if (song == null) index++;
+        song = replayId != null ? await fetchSong(replayId) : await _songFor(playlist, index);
+        if (token != _loadToken) return;
+
+        if (song == null) {
+          if (replayId != null) return;
+          if (++skipped > _maxSkips) {
+            loadError.value = "Couldn't find a playable song";
+            await player.stop();
+            return;
+          }
+          index++;
         }
+      } on PlaylistEnd {
+        if (token == _loadToken) await player.stop();
+        return;
+      } catch (e) {
+        if (token != _loadToken) return;
+        if (++attempts >= _maxAttempts) {
+          loadError.value = "Couldn't load the next song";
+          return;
+        }
+        await Future.delayed(Duration(milliseconds: 500 * attempts));
+        if (token != _loadToken) return;
+      }
+    }
 
-        _index = index;
-        _publish(playlist, index, song);
+    _index = index;
+    _publish(playlist, index, song, replay: replayId != null);
 
+    for (var attempt = 1; ; attempt++) {
+      try {
         await player.setUrl("$apiUrl${song.audio}");
         if (token != _loadToken) return;
 
@@ -559,11 +721,18 @@ class AudioHandler extends BaseAudioHandler with SeekHandler {
         return;
       } catch (e) {
         if (token != _loadToken) return;
+        if (attempt >= _maxAttempts) {
+          loadError.value = "Couldn't play \"${song.title}\"";
+          return;
+        }
+        await Future.delayed(Duration(milliseconds: 500 * attempt));
+        if (token != _loadToken) return;
       }
     }
   }
 
-  void _publish(String playlist, int index, Song song) {
+  void _publish(String playlist, int index, Song song, {required bool replay}) {
+    _onSongStarted(song, replay: replay);
     nowPlaying.value = NowPlaying(playlist, index, song);
     mediaItem.add(MediaItem(
       id: song.audio,
@@ -586,7 +755,12 @@ class AudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToNext() => _playIndex(_index + 1);
 
   @override
-  Future<void> skipToPrevious() => _playIndex(_index - 1);
+  Future<void> skipToPrevious() async {
+    if (player.position > const Duration(seconds: 3) || alreadyPlayed.length < 2) {
+      return player.seek(Duration.zero);
+    }
+    return _playIndex(_index - 1, replayId: alreadyPlayed[alreadyPlayed.length - 2]);
+  }
 
   @override
   Future<void> stop() async {
@@ -650,7 +824,7 @@ class _MediaControllerState extends State<MediaController> {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          icon: Icon(Icons.fast_rewind_rounded, size: size, color: Colors.black),
+          icon: Icon(Icons.fast_rewind_rounded, size: size),
           onPressed: () {
             widget.onFR();
           },
@@ -661,7 +835,7 @@ class _MediaControllerState extends State<MediaController> {
           builder: (context, snapshot) {
             final playing = snapshot.data ?? false;
             return IconButton(
-              icon: Icon((playing || widget.isSeeking) ? Icons.stop_rounded : Icons.play_arrow_rounded, size: size, color: Colors.black),
+              icon: Icon((playing || widget.isSeeking) ? Icons.stop_rounded : Icons.play_arrow_rounded, size: size),
               onPressed: () {
                 if (playing) {
                   widget.player.pause();
@@ -673,7 +847,7 @@ class _MediaControllerState extends State<MediaController> {
           },
         ),
         IconButton(
-          icon: Icon(Icons.fast_forward_rounded, size: size, color: Colors.black),
+          icon: Icon(Icons.fast_forward_rounded, size: size),
           onPressed: () {
             widget.onFF();
           },
@@ -684,7 +858,7 @@ class _MediaControllerState extends State<MediaController> {
 }
 
 class WaveformProgress extends CustomPainter {
-  WaveformProgress(this.progress);
+  WaveformProgress(this.progress, {this.color = Colors.black});
   final amps = <double>[
     0.0, 0.0, 0.13, 0.4, 0.2, 0.5, 0.7, 0.2, 0.63, 0.37, 0.4, 0.77, 0.27, 0.2,
     0.7, 0.17, 0.73, 0.37, 0.43, 0.63, 0.73, 0.6, 0.63, 0.57, 0.2, 0.2, 0.9,
@@ -696,6 +870,7 @@ class WaveformProgress extends CustomPainter {
     0.63, 0.83, 0.73, 0.2, 0.33, 0.13, 0.13, 0.0,
   ]; // Randomly generated list of amplitudes
   final double progress;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -737,13 +912,13 @@ class WaveformProgress extends CustomPainter {
         Radius.circular(w / 2),
       );
 
-      canvas.drawRRect(rrect, Paint()..color = Color.fromARGB((alpha * 255).round(), 0, 0, 0));
+      canvas.drawRRect(rrect, Paint()..color = color.withAlpha((alpha * 255).round()));
     }
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(WaveformProgress old) => old.progress != progress;
+  bool shouldRepaint(WaveformProgress old) => old.progress != progress || old.color != color;
 }
 
 class SongListItem extends StatelessWidget {
@@ -792,14 +967,13 @@ class SongListItem extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 10),
-              SizedBox(
-                width: 300,
+              Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(song.title, style: TextStyle(fontSize: 16), overflow: TextOverflow.ellipsis),
                   Text(song.artist, style: TextStyle(fontSize: 16, color: Colors.grey), overflow: TextOverflow.ellipsis)
                 ])
               ),
-              SizedBox(width: 2)
+              SizedBox(width: 8)
             ]),
         )
       ); 
@@ -808,10 +982,11 @@ class SongListItem extends StatelessWidget {
 }
 
 class PlayerSideMenu extends StatefulWidget {
+  final String nowPlaying;
   final String playlistName;
   final int playlistIndex;
 
-  const new({super.key, required this.playlistName, required this.playlistIndex});
+  const new({super.key, required this.nowPlaying, required this.playlistName, required this.playlistIndex});
 
   @override
   State<PlayerSideMenu> createState() => _PlayerSideMenuState();
@@ -819,113 +994,142 @@ class PlayerSideMenu extends StatefulWidget {
 
 class _PlayerSideMenuState extends State<PlayerSideMenu> {
   bool isExpanded = false;
-  late Future<Playlist> playlistDataFuture;
+
+  late Future<int> _sizeFuture;
+  final Map<int, Future<String>> _itemFutures = {};
 
   @override
   void initState() {
-    // TODO: get all song ids and corresponding data once
-    playlistDataFuture = fetchPlaylist(widget.playlistName);
     super.initState();
+    _sizeFuture = fetchPlaylistSize(widget.playlistName);
   }
 
-  void _retryPlaylistDataFuture() {
+  @override
+  void didUpdateWidget(PlayerSideMenu old) {
+    super.didUpdateWidget(old);
+
+    if (old.playlistName != widget.playlistName) {
+      _sizeFuture = fetchPlaylistSize(widget.playlistName);
+    }
+    if (old.playlistName != widget.playlistName ||
+        old.playlistIndex != widget.playlistIndex ||
+        old.nowPlaying != widget.nowPlaying) {
+      _itemFutures.clear();
+    }
+  }
+
+  void _retrySizeFuture() {
     setState(() {
-      playlistDataFuture = fetchPlaylist(widget.playlistName);
+      _sizeFuture = fetchPlaylistSize(widget.playlistName);
     });
+  }
+
+  Future<String> _itemFuture(int index) => _itemFutures.putIfAbsent(
+    index,
+    () => getSongToBeDisplayed(widget.playlistName, widget.playlistIndex, index),
+  );
+
+  Widget _section(String title, Widget child, {bool topGap = true}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (topGap) SizedBox(height: 10),
+        Text(title, style: TextStyle(fontSize: 16)),
+        SizedBox(height: 5),
+        child,
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final expandedMenu = Container(
-      padding: EdgeInsets.fromLTRB(8, 0, 0, 0),
-      width: 450,
-      height: MediaQuery.sizeOf(context).height,
-      decoration: BoxDecoration(
+    final expandedMenu = Align(
+      alignment: AlignmentGeometry.topLeft,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(8, 0, 0, 0),
+        constraints: const BoxConstraints(maxWidth: 450),
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
-        BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 6)),
-      ],
-        color: Theme.of(context).colorScheme.surfaceContainer,
-      ),
+            BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 6)),
+          ],
+          color: Theme.of(context).colorScheme.surfaceContainer,
+        ),
         child: Align(
-        alignment: AlignmentGeometry.topLeft,
-        child: Padding(
-          padding: EdgeInsets.all(8),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            IconButton(
-              icon: Icon(Icons.arrow_back_rounded),
-              onPressed:() {
-                setState(() {
-                  isExpanded = false;
-                });
-              },
-            ),
-            SizedBox(height: 10),
-            FutureBuilder(
-              future: playlistDataFuture,
-              builder:(context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return waitWidget;
-                }
+          alignment: AlignmentGeometry.topLeft,
+          child: Padding(
+            padding: EdgeInsets.all(8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back_rounded),
+                onPressed:() {
+                  setState(() {
+                    isExpanded = false;
+                  });
+                },
+              ),
+              SizedBox(height: 10),
+              FutureBuilder<int>(
+                future: _sizeFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return waitWidget;
+                  }
 
-                if (snapshot.hasError) {
-                  return errorWidget(_retryPlaylistDataFuture);
-                }
+                  if (snapshot.hasError) {
+                    return errorWidget(_retrySizeFuture);
+                  }
 
-                final playlistItems = snapshot.data;
-                if (playlistItems == null) return waitWidget;
+                  final playlistSize = snapshot.data;
+                  if (playlistSize == null) return waitWidget;
 
-                return FutureBuilder(
-                  future: fetchPlaylistSize(widget.playlistName),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return waitWidget;
-                    }
+                  final queued = determinedQueue.length;
+                  final consumed = playlistPositionAfter(widget.playlistIndex, 0) + 1;
+                  final remaining = doLoop ? playlistSize : max(0, playlistSize - consumed);
 
-                    if (snapshot.hasError) {
-                      return waitWidget;
-                    }
+                  return Expanded(
+                    child: ListView.builder(
+                      itemCount: 1 + queued + remaining,
+                      itemBuilder:(context, index) {
+                        if (index == 0) {
+                          return _section("Now playing", SongListItem(songId: widget.nowPlaying), topGap: false);
+                        }
 
-                    final playlistSize = snapshot.data;
-                    if (playlistSize == null) return waitWidget;
-
-                    return Expanded(
-                      child: ListView.builder(
-                        itemCount: playlistSize,
-                        itemBuilder:(context, index) {
-                          return FutureBuilder(future: getSongAt(widget.playlistName, widget.playlistIndex, offset: index), builder:(context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return songListItemSkeleton(context);
-                            }
-
-                            if (snapshot.hasError) {
-                              return songListItemSkeleton(context);
-                            }
-
+                        return FutureBuilder<String>(
+                          future: _itemFuture(index),
+                          builder:(context, snapshot) {
                             final songId = snapshot.data;
                             if (songId == null) {
                               return songListItemSkeleton(context);
                             }
-                            
+
+                            if (queued > 0 && index == 1) {
+                              return _section("Next from queue", SongListItem(songId: songId));
+                            }
+                            if (index == queued + 1) {
+                              return _section("Next from: ${widget.playlistName}", SongListItem(songId: songId));
+                            }
                             return SongListItem(songId: songId);
-                          });
-                        }
-                      )
-                    );
-                  },
-                );
-              }
-            )
-          ])
+                          },
+                        );
+                      }
+                    )
+                  );
+                },
+              )
+            ])
+          )
         )
-      )
+      ),
     );
 
     final contractedMenu = Align(
       alignment: AlignmentGeometry.topLeft,
       child: Padding(
         padding: EdgeInsets.all(8),
-        child: 
+        child:
           IconButton(
             icon: Icon(Icons.queue_music_rounded),
             onPressed:() {
@@ -961,13 +1165,48 @@ class Player extends StatefulWidget {
 class _PlayerState extends State<Player> {
   AudioPlayer get player => audioHandler.player;
   bool _isSeeking = false;
+  bool _dragging = false;
+  bool _wasPlaying = false;
   double _seekingPos = 0.0;
 
+  @override
+  void didUpdateWidget(Player old) {
+    super.didUpdateWidget(old);
+    if (old.song.id != widget.song.id) {
+      _isSeeking = false;
+      _dragging = false;
+    }
+  }
+
   void _visualSeek(double dx, double size) {
-    player.pause();
+    if (!_isSeeking) {
+      _wasPlaying = player.playing;
+      player.pause();
+    }
     setState(() {
       _isSeeking = true;
       _seekingPos = (dx / size).clamp(0.0, 1.0);
+    });
+  }
+
+  Future<void> _commitSeek() async {
+    if (!_isSeeking) return;
+    await player.seek((player.duration ?? Duration.zero) * _seekingPos);
+    if (!mounted) return;
+    setState(() {
+      _isSeeking = false;
+      _dragging = false;
+    });
+    if (_wasPlaying) player.play();
+  }
+
+  void _cancelSeek() {
+    Future.microtask(() {
+      if (!mounted || _dragging || !_isSeeking) return;
+      setState(() {
+        _isSeeking = false;
+      });
+      if (_wasPlaying) player.play();
     });
   }
 
@@ -987,7 +1226,7 @@ class _PlayerState extends State<Player> {
     }
 
     double minImageSize = imageSize / 2;
-
+  
     final content = Center(
       child: Builder(builder: (context) {
         final song = widget.song;
@@ -1029,7 +1268,7 @@ class _PlayerState extends State<Player> {
 
                   const timeWidth = 60.0;
 
-                  final remaining = duration - position;
+                  final remaining = duration > position ? duration - position : Duration.zero;
                   final minutes = remaining.inMinutes;
                   final seconds = (remaining.inSeconds % 60).toString().padLeft(2, '0');
 
@@ -1040,26 +1279,26 @@ class _PlayerState extends State<Player> {
                         if (justifyLeft) const SizedBox(width: timeWidth), // mirrors the text width so the waveform stays centered
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTapDown:(details) {
+                          onTapDown: (details) {
                             _visualSeek(details.localPosition.dx, waveformSize);
                           },
+                          onTapUp: (_) => _commitSeek(),
+                          onTapCancel: _cancelSeek,
                           onHorizontalDragStart: (details) {
+                            _dragging = true;
                             _visualSeek(details.localPosition.dx, waveformSize);
                           },
                           onHorizontalDragUpdate: (details) {
                             _visualSeek(details.localPosition.dx, waveformSize);
                           },
-                          onHorizontalDragEnd: (details) {
-                            final seekPos = (details.localPosition.dx / waveformSize).clamp(0.0, 1.0);
-                            player.seek((player.duration ?? Duration.zero) * seekPos);
-                            setState(() {
-                              _isSeeking = false;
-                            });
-                            player.play();
+                          onHorizontalDragEnd: (_) => _commitSeek(),
+                          onHorizontalDragCancel: () {
+                            _dragging = false;
+                            _cancelSeek();
                           },
                           child: CustomPaint(
                             size: Size(waveformSize, 30),
-                            painter: WaveformProgress(progress),
+                            painter: WaveformProgress(progress, color: Theme.of(context).colorScheme.onSurface),
                           )
                         ),
                         SizedBox(
@@ -1085,8 +1324,7 @@ class _PlayerState extends State<Player> {
             const paddings = 10.0 + 8.0 + 8.0 + 50.0;
             const textGap = 65;
 
-            final style = DefaultTextStyle.of(context).style;
-            style.merge(TextStyle(fontSize: 14));
+            final style = DefaultTextStyle.of(context).style.merge(TextStyle(fontSize: textSize));
             final textCalculated = max(
               textWidth(context, song.title, style),
               textWidth(context, song.artist, style),
