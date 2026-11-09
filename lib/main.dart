@@ -10,6 +10,8 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 const apiUrl = "http://lenart:5400";
 
+const String endOfPlaylistMessage = "end_of_playlist";
+
 var shuffleSeed = Random().nextInt(1024);
 var doShuffle = true;
 var doLoop = false;
@@ -26,6 +28,7 @@ int playlistPositionAfter(int currentIndex, int n) => generatedQueueStart + curr
 
 Future<String> getSongToBeDisplayed(String playlist, int currentIndex, int offset) {
   assert(offset >= 1);
+
   final queued = determinedQueue.length;
   if (offset <= queued) return Future.value(determinedQueue[offset - 1]);
 
@@ -410,6 +413,11 @@ class _PlayerWidgetState extends State<PlayerWidget> {
   void _onLoadError() {
     final message = audioHandler.loadError.value;
     if (message == null || !mounted) return;
+    if (message == endOfPlaylistMessage) {
+      widget.controller?.onClose!();
+      audioHandler.resetPlaying();
+      return;
+    }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(message)));
   }
 
@@ -447,7 +455,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             toFull: () => widget.controller?.toFullPlayer(),
             isMini: miniPlayer,
           ),
-          if (!miniPlayer) PlayerSideMenu(nowPlaying: now.song.id, playlistName: now.playlist, playlistIndex: now.index),
+          if (!miniPlayer) PlayerSideMenu(nowPlaying: now.song.id, playlistName: audioHandler._playlist ?? "", playlistIndex: now.index),
         ]);
       },
     );
@@ -596,6 +604,17 @@ class MelodiaAudioHandler extends BaseAudioHandler with SeekHandler {
     _nextIndex = null;
   }
 
+  void resetPlaying() {
+    nowPlaying.value = null;
+    _playlist = null;
+    _index = 0;
+    _loadToken = 0;
+    _handlingCompletion = false;
+    _next = null;
+    _nextPlaylist = null;
+    _nextIndex = null;
+  }
+
   Future<void> loadPlaylist(String name) async {
     if (name == _playlist && nowPlaying.value != null) return;
 
@@ -608,7 +627,14 @@ class MelodiaAudioHandler extends BaseAudioHandler with SeekHandler {
     playedFromQueueCount = 0;
     generatedQueueStart = 0;
 
-    await _playIndex(0);
+    if (
+      determinedQueue.isEmpty || // Let the items from the queue play out normally, only switch the
+      nowPlaying.value == null   // songs if a playlist song is playing or there is no song playing
+    ) {                          // if that makes sense, PS. this comment was fucking hard to align
+      await _playIndex(0);
+    } else {
+      playedFromQueueCount = 1; // The playing queue song
+    }
   }
 
   void _onSongStarted(Song song, {required bool replay}) {
@@ -688,7 +714,7 @@ class MelodiaAudioHandler extends BaseAudioHandler with SeekHandler {
         if (song == null) {
           if (replayId != null) return;
           if (++skipped > _maxSkips) {
-            loadError.value = "Couldn't find a playable song";
+            loadError.value = endOfPlaylistMessage;
             await player.stop();
             return;
           }
@@ -700,7 +726,7 @@ class MelodiaAudioHandler extends BaseAudioHandler with SeekHandler {
       } catch (e) {
         if (token != _loadToken) return;
         if (++attempts >= _maxAttempts) {
-          loadError.value = "Couldn't load the next song";
+          loadError.value = endOfPlaylistMessage;
           return;
         }
         await Future.delayed(Duration(milliseconds: 500 * attempts));
